@@ -1,0 +1,43 @@
+CC     = gcc
+
+CFLAGS = -std=c11 -Wall -Wextra \
+         -ffreestanding -fno-stack-protector \
+         -fno-pie -fno-pic -m64 \
+         -O2 -g
+
+ROOT   = ../../..
+LIBC   = $(ROOT)/userland/libc
+LIBNV0 = $(ROOT)/libnv0
+BUILD  = $(ROOT)/build/graphics/desktop
+
+INCLUDES = \
+    -I. \
+    -I.. \
+    -I$(LIBNV0)/include \
+    -I$(LIBC)/include
+
+SRCS = \
+    desktop.c \
+    taskbar.c \
+    launcher.c \
+    wallpaper.c \
+    notification.c
+
+OBJS = $(SRCS:%.c=$(BUILD)/%.o)
+LIB  = $(BUILD)/libdesktop.a
+
+.PHONY: all clean
+
+all: $(BUILD) $(LIB)
+
+$(BUILD):
+	mkdir -p $(BUILD)
+
+$(LIB): $(OBJS)
+	ar rcs $@ $(OBJS)
+
+$(BUILD)/%.o: %.c
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+clean:
+	rm -rf $(BUILD)
