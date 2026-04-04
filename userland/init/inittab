@@ -1,0 +1,16 @@
+# nv0ken inittab
+# format: type:path:arg1:arg2:...
+# types:
+#   boot     - run once at startup, wait for exit before continuing
+#   once     - run once, do not wait, do not respawn
+#   respawn  - restart automatically if it exits
+#   shutdown - run on system shutdown
+
+# boot-time setup scripts
+boot:/bin/sh:/etc/init.d/rc.early
+
+# compositor and window manager (respawn so desktop restarts on crash)
+respawn:/bin/compositor
+
+# login shell on tty0 (respawn so you always get a prompt back)
+respawn:/bin/nv0sh
