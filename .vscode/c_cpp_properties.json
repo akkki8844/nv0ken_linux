@@ -1,0 +1,18 @@
+{
+    "configurations": [
+        {
+            "name": "nv0ken",
+            "includePath": [
+                "${workspaceFolder}/libnv0/include",
+                "${workspaceFolder}/userland/libc/include",
+                "${workspaceFolder}/kernel/lib",
+                "${workspaceFolder}/apps/text_editor"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c11",
+            "intelliSenseMode": "linux-gcc-x64"
+        }
+    ],
+    "version": 4
+}
