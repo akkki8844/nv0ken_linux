@@ -8,7 +8,7 @@ CFLAGS = -std=c11 -Wall -Wextra -Wpedantic \
 ROOT   = ../../..
 LIBNV0 = $(ROOT)/libnv0
 LIBC   = $(ROOT)/userland/libc
-BUILD  = $(ROOT)/build/apps/text_editor
+BUILD  = $(ROOT)/build/apps/terminal
 
 INCLUDES = \
     -I. \
@@ -23,13 +23,12 @@ LDFLAGS = \
     -nostdlib \
     -static
 
-TARGET = $(BUILD)/text_editor
+TARGET = $(BUILD)/terminal
 
 SRCS = \
     main.c \
-    buffer.c \
-    editor.c \
-    syntax.c
+    vt100.c \
+    pty.c
 
 OBJS = $(SRCS:%.c=$(BUILD)/%.o)
 

@@ -1,21 +1,58 @@
 #include "editor.h"
 #include "buffer.h"
+#include <ctype.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+
+#define INDENT_SIZE 4
+#define MAX_PAIRS 8
+
 static void *xmalloc(size_t n) {
-    void *p = malloc(n);
-    if (!p) return NULL;
-    return p;
+  void *p = malloc(n);
+  if (!p)
+    return NULL;
+  return p;
 }
 
 static char *xstrdup(const char *s) {
-    if (!s) return NULL;
-    size_t len = strlen(s);
-    char *out = xmalloc(len + 1);
-    if (!out) return NULL;
-    memcpy(out, s, len + 1);
-    return out;
+  if (!s)
+    return NULL;
+  size_t len = strlen(s);
+  char *out = xmalloc(len + 1);
+  if (!out)
+    return NULL;
+  memcpy(out, s, len + 1);
+  return out;
+}
+
+/* -----------------------------------------------------------------------
+ * Auto-pair table
+ * --------------------------------------------------------------------- */
+
+static const struct {
+  char open;
+  char close;
+} PAIRS[MAX_PAIRS] = {
+    {'(', ')'},   {'[', ']'}, {'{', '}'}, {'"', '"'},
+    {'\'', '\''}, {'`', '`'}, {0, 0},
+};
+
+static char pair_close(char open) {
+  for (int i = 0; PAIRS[i].open; i++)
+    if (PAIRS[i].open == open)
+      return PAIRS[i].close;
+  return 0;
+}
+
+static int is_open(char c) { return pair_close(c) != 0; }
+
+static int is_close(char c) {
+  for (int i = 0; PAIRS[i].open; i++)
+    if (PAIRS[i].close == c && PAIRS[i].open != PAIRS[i].close)
+      return 1;
+  return 0;
 }
 
 /* -----------------------------------------------------------------------
@@ -23,17 +60,18 @@ static char *xstrdup(const char *s) {
  * --------------------------------------------------------------------- */
 
 struct Editor {
-    Buffer *buf;
+  Buffer *buf;
+  EditorMode mode;
 
-    int     tab_width;
-    int     use_spaces;
-    int     auto_indent;
-    int     show_line_numbers;
-    int     word_wrap;
-    int     wrap_col;
+  int auto_indent;
+  int auto_pair;
+  int tab_width;
+  int use_spaces;
 
-    char   *clipboard;
-    size_t  clipboard_len;
+  char *clipboard;
+  size_t clipboard_len;
+
+  EditorConfig cfg;
 };
 
 /* -----------------------------------------------------------------------
@@ -41,529 +79,871 @@ struct Editor {
  * --------------------------------------------------------------------- */
 
 Editor *editor_new(Buffer *buf) {
-    if (!buf) return NULL;
-    Editor *e = xmalloc(sizeof(Editor));
-    if (!e) return NULL;
-    memset(e, 0, sizeof(Editor));
+  if (!buf)
+    return NULL;
+  Editor *e = xmalloc(sizeof(Editor));
+  if (!e)
+    return NULL;
+  memset(e, 0, sizeof(Editor));
 
-    e->buf              = buf;
-    e->tab_width        = 4;
-    e->use_spaces       = 1;
-    e->auto_indent      = 1;
-    e->show_line_numbers= 1;
-    e->word_wrap        = 0;
-    e->wrap_col         = 80;
+  e->buf = buf;
+  e->mode = MODE_NORMAL;
+  e->auto_indent = 1;
+  e->auto_pair = 1;
+  e->tab_width = INDENT_SIZE;
+  e->use_spaces = 1;
 
-    return e;
+  e->cfg.tab_width = INDENT_SIZE;
+  e->cfg.use_spaces = 1;
+  e->cfg.auto_indent = 1;
+  e->cfg.auto_pair = 1;
+  e->cfg.show_line_numbers = 1;
+  e->cfg.word_wrap = 0;
+
+  return e;
 }
 
 void editor_free(Editor *e) {
-    if (!e) return;
-    free(e->clipboard);
-    free(e);
+  if (!e)
+    return;
+  free(e->clipboard);
+  free(e);
+}
+
+void editor_set_config(Editor *e, const EditorConfig *cfg) {
+  if (!e || !cfg)
+    return;
+  e->cfg = *cfg;
+  e->tab_width = cfg->tab_width;
+  e->use_spaces = cfg->use_spaces;
+  e->auto_indent = cfg->auto_indent;
+  e->auto_pair = cfg->auto_pair;
+}
+
+EditorConfig editor_get_config(Editor *e) {
+  EditorConfig cfg = {0};
+  if (!e)
+    return cfg;
+  return e->cfg;
+}
+
+EditorMode editor_mode(Editor *e) { return e ? e->mode : MODE_NORMAL; }
+
+/* -----------------------------------------------------------------------
+ * Auto-indent helpers
+ * --------------------------------------------------------------------- */
+
+static int line_indent_level(Buffer *b, int line) {
+  size_t start = buffer_line_start(b, line);
+  size_t end = buffer_line_end(b, line);
+  int indent = 0;
+  for (size_t i = start; i < end; i++) {
+    char c = buffer_char_at(b, i);
+    if (c == ' ') {
+      indent++;
+    } else if (c == '\t') {
+      indent += 4;
+    } else
+      break;
+  }
+  return indent;
+}
+
+static char line_last_nonspace(Buffer *b, int line) {
+  size_t start = buffer_line_start(b, line);
+  size_t end = buffer_line_end(b, line);
+  if (end == start)
+    return '\0';
+  for (size_t i = end - 1; i >= start; i--) {
+    char c = buffer_char_at(b, i);
+    if (c != ' ' && c != '\t')
+      return c;
+    if (i == start)
+      break;
+  }
+  return '\0';
+}
+
+static char line_first_nonspace(Buffer *b, int line) {
+  size_t start = buffer_line_start(b, line);
+  size_t end = buffer_line_end(b, line);
+  for (size_t i = start; i < end; i++) {
+    char c = buffer_char_at(b, i);
+    if (c != ' ' && c != '\t')
+      return c;
+  }
+  return '\0';
+}
+
+static int compute_new_indent(Buffer *b, int cur_line, int tab_width) {
+  int indent = line_indent_level(b, cur_line);
+  char last = line_last_nonspace(b, cur_line);
+
+  if (last == '{' || last == '(' || last == '[' || last == ':')
+    indent += tab_width;
+
+  return indent;
 }
 
 /* -----------------------------------------------------------------------
- * Settings
+ * editor_type_char — main character input handler
  * --------------------------------------------------------------------- */
 
-void editor_set_tab_width(Editor *e, int w) {
-    if (!e || w < 1 || w > 16) return;
-    e->tab_width = w;
-}
+EditorAction editor_type_char(Editor *e, char c) {
+  if (!e)
+    return ACTION_NONE;
+  Buffer *b = e->buf;
 
-void editor_set_use_spaces(Editor *e, int use_spaces) {
-    if (!e) return;
-    e->use_spaces = use_spaces;
-}
+  if (buffer_has_selection(b))
+    buffer_delete_selection(b);
 
-void editor_set_auto_indent(Editor *e, int on) {
-    if (!e) return;
-    e->auto_indent = on;
-}
+  size_t pos = buffer_cursor(b);
 
-void editor_set_word_wrap(Editor *e, int on, int col) {
-    if (!e) return;
-    e->word_wrap = on;
-    e->wrap_col  = col > 0 ? col : 80;
-}
+  if (e->auto_pair && is_open(c)) {
+    char close = pair_close(c);
+    char next = buffer_char_at(b, pos);
 
-int editor_tab_width(Editor *e)         { return e ? e->tab_width : 4; }
-int editor_use_spaces(Editor *e)        { return e ? e->use_spaces : 1; }
-int editor_auto_indent(Editor *e)       { return e ? e->auto_indent : 1; }
-int editor_show_line_numbers(Editor *e) { return e ? e->show_line_numbers : 1; }
+    if (c == '"' || c == '\'' || c == '`') {
+      if (next == c) {
+        buffer_cursor_move(b, 1);
+        return ACTION_MOVE;
+      }
+    }
+
+    char pair[2] = {c, close};
+    buffer_insert(b, pos, pair, 2);
+    buffer_cursor_set(b, pos + 1);
+    return ACTION_INSERT;
+  }
+
+  if (e->auto_pair && is_close(c)) {
+    char next = buffer_char_at(b, pos);
+    if (next == c) {
+      buffer_cursor_move(b, 1);
+      return ACTION_MOVE;
+    }
+  }
+
+  buffer_insert_char(b, pos, c);
+  buffer_cursor_move(b, 1);
+  return ACTION_INSERT;
+}
 
 /* -----------------------------------------------------------------------
- * Newline with auto-indent
+ * editor_key_return — newline with auto-indent
  * --------------------------------------------------------------------- */
 
-void editor_newline(Editor *e) {
-    if (!e) return;
-    Buffer *b = e->buf;
+EditorAction editor_key_return(Editor *e) {
+  if (!e)
+    return ACTION_NONE;
+  Buffer *b = e->buf;
 
-    size_t pos = buffer_cursor(b);
+  if (buffer_has_selection(b))
+    buffer_delete_selection(b);
 
-    if (buffer_has_selection(b)) {
-        buffer_delete_selection(b);
-        pos = buffer_cursor(b);
-    }
+  size_t pos = buffer_cursor(b);
+  int line, col;
+  buffer_pos_to_lc(b, pos, &line, &col);
 
-    int line, col;
-    buffer_pos_to_lc(b, pos, &line, &col);
-    (void)col;
+  buffer_insert_char(b, pos, '\n');
+  pos++;
 
-    int indent = 0;
-    if (e->auto_indent) {
-        char *line_text = buffer_line_text(b, line);
-        if (line_text) {
-            while (line_text[indent] == ' ' || line_text[indent] == '\t')
-                indent++;
-            free(line_text);
-        }
-        char prev = pos > 0 ? buffer_char_at(b, pos - 1) : '\0';
-        if (prev == '{' || prev == ':' || prev == '(')
-            indent += e->tab_width;
-    }
-
-    buffer_insert_char(b, pos, '\n');
-    pos++;
+  if (e->auto_indent) {
+    int indent = compute_new_indent(b, line, e->tab_width);
 
     if (indent > 0) {
-        char *spaces = xmalloc(indent + 1);
-        if (spaces) {
-            memset(spaces, ' ', indent);
-            spaces[indent] = '\0';
-            buffer_insert(b, pos, spaces, indent);
-            pos += indent;
-            free(spaces);
-        }
+      char *spaces = xmalloc(indent + 1);
+      if (spaces) {
+        memset(spaces, ' ', indent);
+        spaces[indent] = '\0';
+        buffer_insert(b, pos, spaces, indent);
+        pos += indent;
+        free(spaces);
+      }
     }
 
-    buffer_cursor_set(b, pos);
+    char prev_last = line_last_nonspace(b, line);
+    if (prev_last == '{') {
+      int next_line = line + 1 + (indent > 0 ? 0 : 0);
+      char next_first = line_first_nonspace(b, next_line + 1);
+      (void)next_first;
+
+      char next_char = buffer_char_at(b, pos);
+      if (next_char == '}') {
+        buffer_insert_char(b, pos, '\n');
+        int base_indent = line_indent_level(b, line);
+        char *closing_indent = xmalloc(base_indent + 1);
+        if (closing_indent) {
+          memset(closing_indent, ' ', base_indent);
+          closing_indent[base_indent] = '\0';
+          buffer_insert(b, pos + 1, closing_indent, base_indent);
+          free(closing_indent);
+        }
+      }
+    }
+  }
+
+  buffer_cursor_set(b, pos);
+  return ACTION_INSERT;
 }
 
 /* -----------------------------------------------------------------------
- * Tab insertion
+ * editor_key_backspace
  * --------------------------------------------------------------------- */
 
-void editor_insert_tab(Editor *e) {
-    if (!e) return;
-    Buffer *b = e->buf;
+EditorAction editor_key_backspace(Editor *e) {
+  if (!e)
+    return ACTION_NONE;
+  Buffer *b = e->buf;
 
-    if (buffer_has_selection(b)) {
-        editor_indent_selection(e);
-        return;
-    }
+  if (buffer_has_selection(b)) {
+    buffer_delete_selection(b);
+    return ACTION_DELETE;
+  }
 
-    size_t pos = buffer_cursor(b);
+  size_t pos = buffer_cursor(b);
+  if (pos == 0)
+    return ACTION_NONE;
 
-    if (e->use_spaces) {
-        int line, col;
-        buffer_pos_to_lc(b, pos, &line, &col);
-        (void)line;
-        int spaces = e->tab_width - (col % e->tab_width);
-        char *buf = xmalloc(spaces + 1);
-        if (buf) {
-            memset(buf, ' ', spaces);
-            buf[spaces] = '\0';
-            buffer_insert(b, pos, buf, spaces);
-            buffer_cursor_move(b, spaces);
-            free(buf);
-        }
-    } else {
-        buffer_insert_char(b, pos, '\t');
-        buffer_cursor_move(b, 1);
-    }
-}
+  char prev = buffer_char_at(b, pos - 1);
+  char next = buffer_char_at(b, pos);
 
-/* -----------------------------------------------------------------------
- * Backspace with smart dedent
- * --------------------------------------------------------------------- */
-
-void editor_backspace(Editor *e) {
-    if (!e) return;
-    Buffer *b = e->buf;
-
-    if (buffer_has_selection(b)) {
-        buffer_delete_selection(b);
-        return;
-    }
-
-    size_t pos = buffer_cursor(b);
-    if (pos == 0) return;
-
-    if (e->use_spaces) {
-        int line, col;
-        buffer_pos_to_lc(b, pos, &line, &col);
-        (void)line;
-
-        if (col > 0 && col % e->tab_width == 0) {
-            int all_spaces = 1;
-            size_t line_start = buffer_line_start(b, line);
-            for (size_t i = line_start; i < pos; i++) {
-                if (buffer_char_at(b, i) != ' ') { all_spaces = 0; break; }
-            }
-            if (all_spaces && col >= e->tab_width) {
-                buffer_delete(b, pos - e->tab_width, e->tab_width);
-                buffer_cursor_set(b, pos - e->tab_width);
-                return;
-            }
-        }
-    }
-
-    buffer_delete_char_before(b, pos);
+  if (e->auto_pair && is_open(prev) && next == pair_close(prev)) {
+    buffer_delete(b, pos - 1, 2);
     buffer_cursor_set(b, pos - 1);
+    return ACTION_DELETE;
+  }
+
+  int line, col;
+  buffer_pos_to_lc(b, pos, &line, &col);
+
+  if (e->use_spaces && col > 0) {
+    size_t line_start = buffer_line_start(b, line);
+    int all_spaces = 1;
+    for (size_t i = line_start; i < pos; i++) {
+      if (buffer_char_at(b, i) != ' ') {
+        all_spaces = 0;
+        break;
+      }
+    }
+
+    if (all_spaces && col % e->tab_width == 0) {
+      int del = e->tab_width;
+      if (del > col)
+        del = col;
+      buffer_delete(b, pos - del, del);
+      buffer_cursor_set(b, pos - del);
+      return ACTION_DELETE;
+    }
+  }
+
+  buffer_delete_char_before(b, pos);
+  buffer_cursor_set(b, pos - 1);
+  return ACTION_DELETE;
 }
 
 /* -----------------------------------------------------------------------
- * Indent / dedent selection
+ * editor_key_tab
  * --------------------------------------------------------------------- */
 
-void editor_indent_selection(Editor *e) {
-    if (!e || !buffer_has_selection(e->buf)) return;
-    Buffer *b = e->buf;
+EditorAction editor_key_tab(Editor *e, int shift) {
+  if (!e)
+    return ACTION_NONE;
+  Buffer *b = e->buf;
 
+  if (buffer_has_selection(b)) {
     size_t sel_start, sel_end;
     buffer_selection_range(b, &sel_start, &sel_end);
 
-    int first_line, last_line, dummy;
-    buffer_pos_to_lc(b, sel_start, &first_line, &dummy);
-    buffer_pos_to_lc(b, sel_end,   &last_line,  &dummy);
+    int start_line, end_line, dummy;
+    buffer_pos_to_lc(b, sel_start, &start_line, &dummy);
+    buffer_pos_to_lc(b, sel_end, &end_line, &dummy);
+    (void)dummy;
 
-    char *indent_str;
-    int   indent_len;
-    if (e->use_spaces) {
-        indent_str = xmalloc(e->tab_width + 1);
-        if (!indent_str) return;
-        memset(indent_str, ' ', e->tab_width);
-        indent_str[e->tab_width] = '\0';
-        indent_len = e->tab_width;
-    } else {
-        indent_str = xstrdup("\t");
-        if (!indent_str) return;
-        indent_len = 1;
-    }
-
-    for (int ln = first_line; ln <= last_line; ln++) {
+    for (int ln = start_line; ln <= end_line; ln++) {
+      if (!shift) {
         size_t ls = buffer_line_start(b, ln);
-        buffer_insert(b, ls, indent_str, indent_len);
-    }
-
-    free(indent_str);
-    buffer_mark_clear(b);
-}
-
-void editor_dedent_selection(Editor *e) {
-    if (!e || !buffer_has_selection(e->buf)) return;
-    Buffer *b = e->buf;
-
-    size_t sel_start, sel_end;
-    buffer_selection_range(b, &sel_start, &sel_end);
-
-    int first_line, last_line, dummy;
-    buffer_pos_to_lc(b, sel_start, &first_line, &dummy);
-    buffer_pos_to_lc(b, sel_end,   &last_line,  &dummy);
-
-    for (int ln = first_line; ln <= last_line; ln++) {
-        size_t ls  = buffer_line_start(b, ln);
-        char   c   = buffer_char_at(b, ls);
-        if (c == '\t') {
-            buffer_delete(b, ls, 1);
-        } else if (c == ' ') {
-            int removed = 0;
-            while (removed < e->tab_width &&
-                   buffer_char_at(b, ls) == ' ') {
-                buffer_delete(b, ls, 1);
-                removed++;
-            }
+        if (e->use_spaces) {
+          char spaces[INDENT_SIZE + 1];
+          memset(spaces, ' ', e->tab_width);
+          spaces[e->tab_width] = '\0';
+          buffer_insert(b, ls, spaces, e->tab_width);
+        } else {
+          buffer_insert_char(b, ls, '\t');
         }
+      } else {
+        size_t ls = buffer_line_start(b, ln);
+        int removed = 0;
+        while (removed < e->tab_width) {
+          char c = buffer_char_at(b, ls);
+          if (c == ' ') {
+            buffer_delete(b, ls, 1);
+            removed++;
+          } else if (c == '\t') {
+            buffer_delete(b, ls, 1);
+            removed = e->tab_width;
+          } else
+            break;
+        }
+      }
     }
+    return ACTION_INDENT;
+  }
 
+  size_t pos = buffer_cursor(b);
+  if (e->use_spaces) {
+    int line, col;
+    buffer_pos_to_lc(b, pos, &line, &col);
+    int spaces = e->tab_width - (col % e->tab_width);
+    char *sp = xmalloc(spaces + 1);
+    if (sp) {
+      memset(sp, ' ', spaces);
+      sp[spaces] = '\0';
+      buffer_insert(b, pos, sp, spaces);
+      buffer_cursor_move(b, spaces);
+      free(sp);
+    }
+  } else {
+    buffer_insert_char(b, pos, '\t');
+    buffer_cursor_move(b, 1);
+  }
+  return ACTION_INSERT;
+}
+
+/* -----------------------------------------------------------------------
+ * editor_key_delete
+ * --------------------------------------------------------------------- */
+
+EditorAction editor_key_delete(Editor *e) {
+  if (!e)
+    return ACTION_NONE;
+  Buffer *b = e->buf;
+
+  if (buffer_has_selection(b)) {
+    buffer_delete_selection(b);
+    return ACTION_DELETE;
+  }
+
+  buffer_delete_char_after(b, buffer_cursor(b));
+  return ACTION_DELETE;
+}
+
+/* -----------------------------------------------------------------------
+ * editor_move_* — cursor movement with optional selection extension
+ * --------------------------------------------------------------------- */
+
+static void maybe_set_mark(Editor *e, int extend) {
+  Buffer *b = e->buf;
+  if (extend && !buffer_has_selection(b))
+    buffer_mark_set(b, buffer_cursor(b));
+  if (!extend)
     buffer_mark_clear(b);
 }
 
+EditorAction editor_move_left(Editor *e, int extend, int by_word) {
+  if (!e)
+    return ACTION_NONE;
+  maybe_set_mark(e, extend);
+  if (by_word)
+    buffer_cursor_word_back(e->buf);
+  else
+    buffer_cursor_move(e->buf, -1);
+  return ACTION_MOVE;
+}
+
+EditorAction editor_move_right(Editor *e, int extend, int by_word) {
+  if (!e)
+    return ACTION_NONE;
+  maybe_set_mark(e, extend);
+  if (by_word)
+    buffer_cursor_word_forward(e->buf);
+  else
+    buffer_cursor_move(e->buf, 1);
+  return ACTION_MOVE;
+}
+
+EditorAction editor_move_up(Editor *e, int extend, int lines) {
+  if (!e)
+    return ACTION_NONE;
+  maybe_set_mark(e, extend);
+  buffer_cursor_line(e->buf, -lines);
+  return ACTION_MOVE;
+}
+
+EditorAction editor_move_down(Editor *e, int extend, int lines) {
+  if (!e)
+    return ACTION_NONE;
+  maybe_set_mark(e, extend);
+  buffer_cursor_line(e->buf, lines);
+  return ACTION_MOVE;
+}
+
+EditorAction editor_move_home(Editor *e, int extend) {
+  if (!e)
+    return ACTION_NONE;
+  maybe_set_mark(e, extend);
+  Buffer *b = e->buf;
+  size_t pos = buffer_cursor(b);
+  int line, col;
+  buffer_pos_to_lc(b, pos, &line, &col);
+  size_t line_start = buffer_line_start(b, line);
+
+  size_t first_nonspace = line_start;
+  for (size_t i = line_start;; i++) {
+    char c = buffer_char_at(b, i);
+    if (c == ' ' || c == '\t')
+      first_nonspace = i + 1;
+    else
+      break;
+  }
+
+  if (pos == first_nonspace || col == 0)
+    buffer_cursor_home(b);
+  else
+    buffer_cursor_set(b, first_nonspace);
+
+  return ACTION_MOVE;
+}
+
+EditorAction editor_move_end(Editor *e, int extend) {
+  if (!e)
+    return ACTION_NONE;
+  maybe_set_mark(e, extend);
+  buffer_cursor_end(e->buf);
+  return ACTION_MOVE;
+}
+
+EditorAction editor_move_doc_start(Editor *e, int extend) {
+  if (!e)
+    return ACTION_NONE;
+  maybe_set_mark(e, extend);
+  buffer_cursor_set(e->buf, 0);
+  return ACTION_MOVE;
+}
+
+EditorAction editor_move_doc_end(Editor *e, int extend) {
+  if (!e)
+    return ACTION_NONE;
+  maybe_set_mark(e, extend);
+  buffer_cursor_set(e->buf, buffer_length(e->buf));
+  return ACTION_MOVE;
+}
+
+EditorAction editor_move_to_line(Editor *e, int line) {
+  if (!e)
+    return ACTION_NONE;
+  buffer_mark_clear(e->buf);
+  buffer_cursor_set(e->buf, buffer_lc_to_pos(e->buf, line, 0));
+  return ACTION_MOVE;
+}
+
 /* -----------------------------------------------------------------------
- * Duplicate line
+ * editor_select_all
  * --------------------------------------------------------------------- */
 
-void editor_duplicate_line(Editor *e) {
-    if (!e) return;
-    Buffer *b = e->buf;
+EditorAction editor_select_all(Editor *e) {
+  if (!e)
+    return ACTION_NONE;
+  buffer_mark_set(e->buf, 0);
+  buffer_cursor_set(e->buf, buffer_length(e->buf));
+  return ACTION_MOVE;
+}
 
-    size_t pos = buffer_cursor(b);
-    int line, col;
-    buffer_pos_to_lc(b, pos, &line, &col);
-    (void)col;
+EditorAction editor_select_word(Editor *e) {
+  if (!e)
+    return ACTION_NONE;
+  Buffer *b = e->buf;
+  size_t pos = buffer_cursor(b);
+  size_t len = buffer_length(b);
 
-    char *text = buffer_line_text(b, line);
-    if (!text) return;
+  size_t start = pos;
+  while (start > 0 && (isalnum((unsigned char)buffer_char_at(b, start - 1)) ||
+                       buffer_char_at(b, start - 1) == '_'))
+    start--;
 
-    size_t line_end_pos = buffer_line_end(b, line);
-    size_t len = strlen(text);
+  size_t end = pos;
+  while (end < len && (isalnum((unsigned char)buffer_char_at(b, end)) ||
+                       buffer_char_at(b, end) == '_'))
+    end++;
 
-    buffer_insert_char(b, line_end_pos, '\n');
-    buffer_insert(b, line_end_pos + 1, text, len);
-    buffer_cursor_set(b, line_end_pos + 1 + (pos - buffer_line_start(b, line)));
+  if (end > start) {
+    buffer_mark_set(b, start);
+    buffer_cursor_set(b, end);
+  }
+  return ACTION_MOVE;
+}
 
+EditorAction editor_select_line(Editor *e) {
+  if (!e)
+    return ACTION_NONE;
+  Buffer *b = e->buf;
+  int line, col;
+  buffer_pos_to_lc(b, buffer_cursor(b), &line, &col);
+  (void)col;
+  size_t start = buffer_line_start(b, line);
+  size_t end = (line + 1 < buffer_line_count(b))
+                   ? buffer_line_start(b, line + 1)
+                   : buffer_length(b);
+  buffer_mark_set(b, start);
+  buffer_cursor_set(b, end);
+  return ACTION_MOVE;
+}
+
+/* -----------------------------------------------------------------------
+ * Line operations
+ * --------------------------------------------------------------------- */
+
+EditorAction editor_duplicate_line(Editor *e) {
+  if (!e)
+    return ACTION_NONE;
+  Buffer *b = e->buf;
+  int line, col;
+  buffer_pos_to_lc(b, buffer_cursor(b), &line, &col);
+  (void)col;
+
+  char *text = buffer_line_text(b, line);
+  if (!text)
+    return ACTION_NONE;
+
+  size_t end = (line + 1 < buffer_line_count(b))
+                   ? buffer_line_start(b, line + 1)
+                   : buffer_length(b);
+
+  size_t tlen = strlen(text);
+  char *with_nl = xmalloc(tlen + 2);
+  if (!with_nl) {
     free(text);
+    return ACTION_NONE;
+  }
+  memcpy(with_nl, text, tlen);
+  with_nl[tlen] = '\n';
+  with_nl[tlen + 1] = '\0';
+
+  buffer_insert(b, end, with_nl, tlen + 1);
+
+  free(text);
+  free(with_nl);
+  buffer_cursor_set(b, buffer_lc_to_pos(b, line + 1, col));
+  return ACTION_INSERT;
 }
 
-/* -----------------------------------------------------------------------
- * Delete line
- * --------------------------------------------------------------------- */
-
-void editor_delete_line(Editor *e) {
-    if (!e) return;
-    Buffer *b = e->buf;
-
-    size_t pos = buffer_cursor(b);
-    int line, col;
-    buffer_pos_to_lc(b, pos, &line, &col);
-    (void)col;
-
-    size_t ls = buffer_line_start(b, line);
-    int total_lines = buffer_line_count(b);
-    size_t le;
-
-    if (line + 1 < total_lines)
-        le = buffer_line_start(b, line + 1);
-    else
-        le = buffer_length(b);
-
-    buffer_delete(b, ls, le - ls);
-
-    if (ls >= buffer_length(b) && ls > 0)
-        buffer_cursor_set(b, buffer_length(b));
-    else
-        buffer_cursor_set(b, ls);
+EditorAction editor_delete_line(Editor *e) {
+  if (!e)
+    return ACTION_NONE;
+  Buffer *b = e->buf;
+  int line, col;
+  buffer_pos_to_lc(b, buffer_cursor(b), &line, &col);
+  (void)col;
+  buffer_delete_line(b, line);
+  int new_line = line < buffer_line_count(b) ? line : line - 1;
+  if (new_line < 0)
+    new_line = 0;
+  buffer_cursor_set(b, buffer_lc_to_pos(b, new_line, 0));
+  return ACTION_DELETE;
 }
 
-/* -----------------------------------------------------------------------
- * Move line up / down
- * --------------------------------------------------------------------- */
+EditorAction editor_move_line_up(Editor *e) {
+  if (!e)
+    return ACTION_NONE;
+  Buffer *b = e->buf;
+  int line, col;
+  buffer_pos_to_lc(b, buffer_cursor(b), &line, &col);
+  if (line == 0)
+    return ACTION_NONE;
 
-void editor_move_line_up(Editor *e) {
-    if (!e) return;
-    Buffer *b = e->buf;
-
-    size_t pos = buffer_cursor(b);
-    int line, col;
-    buffer_pos_to_lc(b, pos, &line, &col);
-
-    if (line == 0) return;
-
-    char *cur  = buffer_line_text(b, line);
-    char *prev = buffer_line_text(b, line - 1);
-    if (!cur || !prev) { free(cur); free(prev); return; }
-
-    size_t cur_len  = strlen(cur);
-    size_t prev_len = strlen(prev);
-    size_t prev_start = buffer_line_start(b, line - 1);
-
-    buffer_delete(b, prev_start, prev_len + 1 + cur_len);
-
-    buffer_insert(b, prev_start, cur, cur_len);
-    buffer_insert_char(b, prev_start + cur_len, '\n');
-    buffer_insert(b, prev_start + cur_len + 1, prev, prev_len);
-
-    buffer_cursor_set(b, buffer_lc_to_pos(b, line - 1, col));
-
+  char *cur = buffer_line_text(b, line);
+  char *prev = buffer_line_text(b, line - 1);
+  if (!cur || !prev) {
     free(cur);
     free(prev);
+    return ACTION_NONE;
+  }
+
+  size_t cur_len = strlen(cur);
+  size_t prev_len = strlen(prev);
+
+  size_t prev_start = buffer_line_start(b, line - 1);
+  size_t block_len = prev_len + 1 + cur_len + 1;
+
+  char *swapped = xmalloc(block_len + 1);
+  if (!swapped) {
+    free(cur);
+    free(prev);
+    return ACTION_NONE;
+  }
+
+  int n = snprintf(swapped, block_len + 1, "%s\n%s\n", cur, prev);
+  buffer_delete(b, prev_start, (size_t)n > block_len ? block_len : (size_t)n);
+  buffer_insert(b, prev_start, swapped,
+                (size_t)n > block_len ? block_len : (size_t)n);
+  buffer_cursor_set(b, buffer_lc_to_pos(b, line - 1, col));
+
+  free(cur);
+  free(prev);
+  free(swapped);
+  return ACTION_INSERT;
 }
 
-void editor_move_line_down(Editor *e) {
-    if (!e) return;
-    Buffer *b = e->buf;
+EditorAction editor_move_line_down(Editor *e) {
+  if (!e)
+    return ACTION_NONE;
+  Buffer *b = e->buf;
+  int line, col;
+  buffer_pos_to_lc(b, buffer_cursor(b), &line, &col);
+  if (line + 1 >= buffer_line_count(b))
+    return ACTION_NONE;
 
-    size_t pos = buffer_cursor(b);
-    int line, col;
-    buffer_pos_to_lc(b, pos, &line, &col);
-
-    if (line + 1 >= buffer_line_count(b)) return;
-
-    char *cur  = buffer_line_text(b, line);
-    char *next = buffer_line_text(b, line + 1);
-    if (!cur || !next) { free(cur); free(next); return; }
-
-    size_t cur_len  = strlen(cur);
-    size_t next_len = strlen(next);
-    size_t cur_start = buffer_line_start(b, line);
-
-    buffer_delete(b, cur_start, cur_len + 1 + next_len);
-
-    buffer_insert(b, cur_start, next, next_len);
-    buffer_insert_char(b, cur_start + next_len, '\n');
-    buffer_insert(b, cur_start + next_len + 1, cur, cur_len);
-
-    buffer_cursor_set(b, buffer_lc_to_pos(b, line + 1, col));
-
+  char *cur = buffer_line_text(b, line);
+  char *next = buffer_line_text(b, line + 1);
+  if (!cur || !next) {
     free(cur);
     free(next);
+    return ACTION_NONE;
+  }
+
+  size_t cur_len = strlen(cur);
+  size_t next_len = strlen(next);
+  size_t cur_start = buffer_line_start(b, line);
+  size_t block_len = cur_len + 1 + next_len + 1;
+
+  char *swapped = xmalloc(block_len + 1);
+  if (!swapped) {
+    free(cur);
+    free(next);
+    return ACTION_NONE;
+  }
+
+  int n = snprintf(swapped, block_len + 1, "%s\n%s\n", next, cur);
+  buffer_delete(b, cur_start, (size_t)n > block_len ? block_len : (size_t)n);
+  buffer_insert(b, cur_start, swapped,
+                (size_t)n > block_len ? block_len : (size_t)n);
+  buffer_cursor_set(b, buffer_lc_to_pos(b, line + 1, col));
+
+  free(cur);
+  free(next);
+  free(swapped);
+  return ACTION_INSERT;
 }
 
 /* -----------------------------------------------------------------------
- * Toggle line comment
+ * Clipboard
  * --------------------------------------------------------------------- */
 
-void editor_toggle_comment(Editor *e, const char *comment_prefix) {
-    if (!e || !comment_prefix) return;
-    Buffer *b = e->buf;
-    size_t prefix_len = strlen(comment_prefix);
+EditorAction editor_copy(Editor *e) {
+  if (!e)
+    return ACTION_NONE;
+  char *text;
+  size_t len;
+  if (buffer_copy(e->buf, &text, &len) < 0)
+    return ACTION_NONE;
+  free(e->clipboard);
+  e->clipboard = text;
+  e->clipboard_len = len;
+  return ACTION_COPY;
+}
 
-    int first_line, last_line, dummy;
-    if (buffer_has_selection(b)) {
-        size_t sel_start, sel_end;
-        buffer_selection_range(b, &sel_start, &sel_end);
-        buffer_pos_to_lc(b, sel_start, &first_line, &dummy);
-        buffer_pos_to_lc(b, sel_end,   &last_line,  &dummy);
+EditorAction editor_cut(Editor *e) {
+  if (!e)
+    return ACTION_NONE;
+  char *text;
+  size_t len;
+  if (buffer_cut(e->buf, &text, &len) < 0)
+    return ACTION_NONE;
+  free(e->clipboard);
+  e->clipboard = text;
+  e->clipboard_len = len;
+  return ACTION_CUT;
+}
+
+EditorAction editor_paste(Editor *e) {
+  if (!e || !e->clipboard)
+    return ACTION_NONE;
+  buffer_paste(e->buf, e->clipboard, e->clipboard_len);
+  return ACTION_INSERT;
+}
+
+EditorAction editor_paste_text(Editor *e, const char *text, size_t len) {
+  if (!e || !text || len == 0)
+    return ACTION_NONE;
+  buffer_paste(e->buf, text, len);
+  return ACTION_INSERT;
+}
+
+/* -----------------------------------------------------------------------
+ * Undo / redo
+ * --------------------------------------------------------------------- */
+
+EditorAction editor_undo(Editor *e) {
+  if (!e)
+    return ACTION_NONE;
+  if (buffer_undo(e->buf) < 0)
+    return ACTION_NONE;
+  return ACTION_UNDO;
+}
+
+EditorAction editor_redo(Editor *e) {
+  if (!e)
+    return ACTION_NONE;
+  if (buffer_redo(e->buf) < 0)
+    return ACTION_NONE;
+  return ACTION_REDO;
+}
+
+/* -----------------------------------------------------------------------
+ * Comment toggling
+ * --------------------------------------------------------------------- */
+
+static const char *comment_prefix(SyntaxLang lang) {
+  switch (lang) {
+  case LANG_C:
+  case LANG_JS:
+    return "// ";
+  case LANG_PYTHON:
+  case LANG_SHELL:
+  case LANG_MAKEFILE:
+    return "# ";
+  case LANG_ASM:
+    return "; ";
+  default:
+    return "// ";
+  }
+}
+
+EditorAction editor_toggle_comment(Editor *e, SyntaxLang lang) {
+  if (!e)
+    return ACTION_NONE;
+  Buffer *b = e->buf;
+
+  int start_line, end_line, dummy;
+  if (buffer_has_selection(b)) {
+    size_t sel_start, sel_end;
+    buffer_selection_range(b, &sel_start, &sel_end);
+    buffer_pos_to_lc(b, sel_start, &start_line, &dummy);
+    buffer_pos_to_lc(b, sel_end, &end_line, &dummy);
+    (void)dummy;
+  } else {
+    buffer_pos_to_lc(b, buffer_cursor(b), &start_line, &dummy);
+    end_line = start_line;
+  }
+
+  const char *prefix = comment_prefix(lang);
+  size_t prefix_len = strlen(prefix);
+
+  int all_commented = 1;
+  for (int ln = start_line; ln <= end_line; ln++) {
+    char *text = buffer_line_text(b, ln);
+    if (!text)
+      continue;
+    int has = strncmp(text, prefix, prefix_len) == 0;
+    free(text);
+    if (!has) {
+      all_commented = 0;
+      break;
+    }
+  }
+
+  for (int ln = start_line; ln <= end_line; ln++) {
+    size_t ls = buffer_line_start(b, ln);
+    if (all_commented) {
+      char *text = buffer_line_text(b, ln);
+      if (text && strncmp(text, prefix, prefix_len) == 0) {
+        buffer_delete(b, ls, prefix_len);
+      }
+      free(text);
     } else {
-        buffer_pos_to_lc(b, buffer_cursor(b), &first_line, &dummy);
-        last_line = first_line;
+      buffer_insert(b, ls, prefix, prefix_len);
     }
+  }
 
-    int all_commented = 1;
-    for (int ln = first_line; ln <= last_line; ln++) {
-        char *text = buffer_line_text(b, ln);
-        if (!text) { all_commented = 0; break; }
-        int i = 0;
-        while (text[i] == ' ' || text[i] == '\t') i++;
-        if (strncmp(text + i, comment_prefix, prefix_len) != 0)
-            all_commented = 0;
-        free(text);
-        if (!all_commented) break;
-    }
-
-    for (int ln = first_line; ln <= last_line; ln++) {
-        size_t ls   = buffer_line_start(b, ln);
-        char *text  = buffer_line_text(b, ln);
-        if (!text) continue;
-
-        if (all_commented) {
-            int i = 0;
-            while (text[i] == ' ' || text[i] == '\t') i++;
-            buffer_delete(b, ls + i, prefix_len);
-        } else {
-            buffer_insert(b, ls, comment_prefix, prefix_len);
-        }
-        free(text);
-    }
-
-    buffer_mark_clear(b);
+  return ACTION_INSERT;
 }
 
 /* -----------------------------------------------------------------------
- * Internal clipboard (fallback if no system clipboard)
+ * Bracket matching
  * --------------------------------------------------------------------- */
 
-void editor_clipboard_copy(Editor *e) {
-    if (!e || !buffer_has_selection(e->buf)) return;
-    char *text;
-    size_t len;
-    if (buffer_copy(e->buf, &text, &len) == 0) {
-        free(e->clipboard);
-        e->clipboard     = text;
-        e->clipboard_len = len;
-    }
-}
+size_t editor_find_matching_bracket(Editor *e) {
+  if (!e)
+    return BUFFER_NPOS;
+  Buffer *b = e->buf;
+  size_t pos = buffer_cursor(b);
+  size_t len = buffer_length(b);
 
-void editor_clipboard_cut(Editor *e) {
-    if (!e || !buffer_has_selection(e->buf)) return;
-    char *text;
-    size_t len;
-    if (buffer_cut(e->buf, &text, &len) == 0) {
-        free(e->clipboard);
-        e->clipboard     = text;
-        e->clipboard_len = len;
-    }
-}
+  char c = buffer_char_at(b, pos);
 
-void editor_clipboard_paste(Editor *e) {
-    if (!e || !e->clipboard || e->clipboard_len == 0) return;
-    buffer_paste(e->buf, e->clipboard, e->clipboard_len);
+  char open = 0, close = 0;
+  int forward = 1;
+
+  if (c == '(' || c == '[' || c == '{') {
+    open = c;
+    close = (c == '(') ? ')' : (c == '[') ? ']' : '}';
+    forward = 1;
+  } else if (c == ')' || c == ']' || c == '}') {
+    close = c;
+    open = (c == ')') ? '(' : (c == ']') ? '[' : '{';
+    forward = 0;
+  } else {
+    return BUFFER_NPOS;
+  }
+
+  int depth = 1;
+  if (forward) {
+    for (size_t i = pos + 1; i < len; i++) {
+      char ch = buffer_char_at(b, i);
+      if (ch == open)
+        depth++;
+      if (ch == close) {
+        depth--;
+        if (depth == 0)
+          return i;
+      }
+    }
+  } else {
+    for (size_t i = pos; i > 0; i--) {
+      char ch = buffer_char_at(b, i - 1);
+      if (ch == close)
+        depth++;
+      if (ch == open) {
+        depth--;
+        if (depth == 0)
+          return i - 1;
+      }
+    }
+  }
+  return BUFFER_NPOS;
 }
 
 /* -----------------------------------------------------------------------
- * Go to line
+ * Word count
  * --------------------------------------------------------------------- */
 
-void editor_goto_line(Editor *e, int line) {
-    if (!e) return;
-    buffer_cursor_set(e->buf, buffer_lc_to_pos(e->buf, line - 1, 0));
-}
+EditorStats editor_stats(Editor *e) {
+  EditorStats s = {0};
+  if (!e)
+    return s;
 
-/* -----------------------------------------------------------------------
- * Word under cursor
- * --------------------------------------------------------------------- */
+  Buffer *b = e->buf;
+  size_t len = buffer_length(b);
+  s.char_count = (int)len;
+  s.line_count = buffer_line_count(b);
 
-char *editor_word_at_cursor(Editor *e) {
-    if (!e) return NULL;
-    Buffer *b   = e->buf;
-    size_t  pos = buffer_cursor(b);
-    size_t  len = buffer_length(b);
-
-    size_t start = pos;
-    while (start > 0) {
-        char c = buffer_char_at(b, start - 1);
-        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-              (c >= '0' && c <= '9') || c == '_')) break;
-        start--;
+  int in_word = 0;
+  for (size_t i = 0; i < len; i++) {
+    char c = buffer_char_at(b, i);
+    if (isspace((unsigned char)c)) {
+      in_word = 0;
+    } else {
+      if (!in_word) {
+        s.word_count++;
+        in_word = 1;
+      }
     }
+  }
 
-    size_t end = pos;
-    while (end < len) {
-        char c = buffer_char_at(b, end);
-        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-              (c >= '0' && c <= '9') || c == '_')) break;
-        end++;
-    }
+  int line, col;
+  buffer_pos_to_lc(b, buffer_cursor(b), &line, &col);
+  s.cursor_line = line + 1;
+  s.cursor_col = col + 1;
 
-    if (end <= start) return NULL;
-    size_t word_len = end - start;
-    char *word = xmalloc(word_len + 1);
-    if (!word) return NULL;
-    for (size_t i = 0; i < word_len; i++)
-        word[i] = buffer_char_at(b, start + i);
-    word[word_len] = '\0';
-    return word;
-}
-
-/* -----------------------------------------------------------------------
- * Select word at cursor
- * --------------------------------------------------------------------- */
-
-void editor_select_word(Editor *e) {
-    if (!e) return;
-    Buffer *b   = e->buf;
-    size_t  pos = buffer_cursor(b);
-    size_t  len = buffer_length(b);
-
-    size_t start = pos;
-    while (start > 0) {
-        char c = buffer_char_at(b, start - 1);
-        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-              (c >= '0' && c <= '9') || c == '_')) break;
-        start--;
-    }
-
-    size_t end = pos;
-    while (end < len) {
-        char c = buffer_char_at(b, end);
-        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-              (c >= '0' && c <= '9') || c == '_')) break;
-        end++;
-    }
-
-    if (end > start) {
-        buffer_mark_set(b, start);
-        buffer_cursor_set(b, end);
-    }
-}
-
-/* -----------------------------------------------------------------------
- * Accessors
- * --------------------------------------------------------------------- */
-
-Buffer *editor_buffer(Editor *e) {
-    return e ? e->buf : NULL;
+  return s;
 }

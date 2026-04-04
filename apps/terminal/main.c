@@ -1,678 +1,327 @@
-#include "buffer.h"
-#include "editor.h"
-#include "syntax.h"
+#include "vt100.h"
+#include "pty.h"
 #include "../../../libnv0/include/nv0/app.h"
 #include "../../../libnv0/include/nv0/window.h"
 #include "../../../libnv0/include/nv0/input.h"
 #include "../../../libnv0/include/nv0/draw.h"
-#include "../../../libnv0/include/nv0/dialog.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 
-#define WINDOW_W        1000
-#define WINDOW_H        680
-#define TOOLBAR_H       36
-#define STATUSBAR_H     22
-#define GUTTER_W        48
+#define WINDOW_W        800
+#define WINDOW_H        500
 #define CELL_W          8
 #define CELL_H          16
-#define PADDING         8
-#define CONTENT_X       (GUTTER_W + PADDING)
-#define CONTENT_Y       TOOLBAR_H
-#define CONTENT_W       (WINDOW_W - GUTTER_W - PADDING)
-#define CONTENT_H       (WINDOW_H - TOOLBAR_H - STATUSBAR_H)
-#define VISIBLE_COLS    ((CONTENT_W) / CELL_W)
-#define VISIBLE_ROWS    ((CONTENT_H) / CELL_H)
+#define PADDING         4
+#define COLS            ((WINDOW_W - PADDING * 2) / CELL_W)
+#define ROWS            ((WINDOW_H - PADDING * 2) / CELL_H)
+#define SCROLLBACK      1000
+#define BLINK_MS        500
 
 #define COL_BG          NV_COLOR(0x1E, 0x1E, 0x1E, 0xFF)
-#define COL_GUTTER_BG   NV_COLOR(0x25, 0x25, 0x25, 0xFF)
-#define COL_GUTTER_FG   NV_COLOR(0x50, 0x50, 0x50, 0xFF)
-#define COL_CURLINE_BG  NV_COLOR(0x28, 0x28, 0x28, 0xFF)
+#define COL_FG          NV_COLOR(0xCC, 0xCC, 0xCC, 0xFF)
 #define COL_CURSOR      NV_COLOR(0xCC, 0xCC, 0xCC, 0xFF)
-#define COL_TOOLBAR_BG  NV_COLOR(0x2D, 0x2D, 0x2D, 0xFF)
-#define COL_STATUS_BG   NV_COLOR(0x00, 0x7A, 0xCC, 0xFF)
-#define COL_STATUS_FG   NV_COLOR(0xFF, 0xFF, 0xFF, 0xFF)
-#define COL_BTN_BG      NV_COLOR(0x40, 0x40, 0x40, 0xFF)
-#define COL_BTN_FG      NV_COLOR(0xCC, 0xCC, 0xCC, 0xFF)
-#define COL_BORDER      NV_COLOR(0x14, 0x14, 0x14, 0xFF)
-#define COL_SELECTION   NV_COLOR(0x26, 0x4F, 0x78, 0xFF)
-#define COL_FIND_HL     NV_COLOR(0x61, 0x3F, 0x00, 0xFF)
+#define COL_SELECT      NV_COLOR(0x26, 0x4F, 0x78, 0xFF)
 
-static const NvColor SYN_COLORS[] = {
+static const NvColor ANSI_COLORS[16] = {
+    NV_COLOR(0x1E, 0x1E, 0x1E, 0xFF),
+    NV_COLOR(0xCD, 0x31, 0x31, 0xFF),
+    NV_COLOR(0x0D, 0xBC, 0x79, 0xFF),
+    NV_COLOR(0xE5, 0xC0, 0x7B, 0xFF),
+    NV_COLOR(0x52, 0x9B, 0xD8, 0xFF),
+    NV_COLOR(0xC6, 0x78, 0xDD, 0xFF),
+    NV_COLOR(0x56, 0xB6, 0xC2, 0xFF),
     NV_COLOR(0xCC, 0xCC, 0xCC, 0xFF),
-    NV_COLOR(0x56, 0x9C, 0xD6, 0xFF),
-    NV_COLOR(0x4E, 0xC9, 0xB0, 0xFF),
-    NV_COLOR(0xDC, 0xDC, 0xAA, 0xFF),
-    NV_COLOR(0xCE, 0x91, 0x78, 0xFF),
-    NV_COLOR(0xB5, 0xCE, 0xA8, 0xFF),
-    NV_COLOR(0x6A, 0x99, 0x55, 0xFF),
-    NV_COLOR(0xC5, 0x86, 0xC0, 0xFF),
-    NV_COLOR(0x9C, 0xDC, 0xFE, 0xFF),
-    NV_COLOR(0xD7, 0xBA, 0x7D, 0xFF),
-    NV_COLOR(0xFF, 0xD7, 0x00, 0xFF),
-    NV_COLOR(0xCC, 0xCC, 0xCC, 0xFF),
-    NV_COLOR(0xCC, 0xCC, 0xCC, 0xFF),
-    NV_COLOR(0x56, 0x9C, 0xD6, 0xFF),
-    NV_COLOR(0x4E, 0xC9, 0xB0, 0xFF),
-    NV_COLOR(0xDC, 0xDC, 0xAA, 0xFF),
+    NV_COLOR(0x80, 0x80, 0x80, 0xFF),
+    NV_COLOR(0xF1, 0x45, 0x14, 0xFF),
+    NV_COLOR(0x23, 0xD1, 0x8B, 0xFF),
+    NV_COLOR(0xF5, 0xF5, 0x43, 0xFF),
+    NV_COLOR(0x3B, 0x8E, 0xEA, 0xFF),
+    NV_COLOR(0xD6, 0x70, 0xDE, 0xFF),
+    NV_COLOR(0x29, 0xB8, 0xDB, 0xFF),
+    NV_COLOR(0xFF, 0xFF, 0xFF, 0xFF),
 };
 
 typedef struct {
-    NvWindow    *window;
-    NvSurface   *surface;
+    NvWindow  *window;
+    NvSurface *surface;
 
-    Buffer      *buf;
-    Editor      *editor;
-    SyntaxState *syntax;
-    SyntaxLang   lang;
+    Vt100     *vt;
+    Pty       *pty;
 
-    int          scroll_line;
-    int          scroll_col;
+    int        blink_on;
+    int        blink_ticks;
 
-    char         find_query[256];
-    int          find_active;
-    size_t       find_pos;
+    int        sel_active;
+    int        sel_start_col;
+    int        sel_start_row;
+    int        sel_end_col;
+    int        sel_end_row;
+    int        sel_dragging;
+} Terminal;
 
-    char         status_msg[256];
-} TextEditor;
-
-static TextEditor g_ed;
-
-/* -----------------------------------------------------------------------
- * Scroll management
- * --------------------------------------------------------------------- */
-
-static void ensure_cursor_visible(TextEditor *te) {
-    int cur_line, cur_col;
-    buffer_pos_to_lc(te->buf, buffer_cursor(te->buf), &cur_line, &cur_col);
-
-    if (cur_line < te->scroll_line)
-        te->scroll_line = cur_line;
-    if (cur_line >= te->scroll_line + VISIBLE_ROWS)
-        te->scroll_line = cur_line - VISIBLE_ROWS + 1;
-
-    if (cur_col < te->scroll_col)
-        te->scroll_col = cur_col;
-    if (cur_col >= te->scroll_col + VISIBLE_COLS)
-        te->scroll_col = cur_col - VISIBLE_COLS + 1;
-}
+static Terminal g_term;
 
 /* -----------------------------------------------------------------------
- * Status
+ * Color resolution
  * --------------------------------------------------------------------- */
 
-static void set_status(TextEditor *te, const char *msg) {
-    strncpy(te->status_msg, msg, sizeof(te->status_msg) - 1);
-    te->status_msg[sizeof(te->status_msg) - 1] = '\0';
-    nv_surface_invalidate(te->surface);
-}
-
-static void update_status(TextEditor *te) {
-    int line, col;
-    buffer_pos_to_lc(te->buf, buffer_cursor(te->buf), &line, &col);
-
-    char buf[256];
-    const char *filename = buffer_filename(te->buf);
-    if (!filename) filename = "untitled";
-    snprintf(buf, sizeof(buf), "%s%s  Ln %d, Col %d  %s",
-             filename,
-             buffer_modified(te->buf) ? " *" : "",
-             line + 1, col + 1,
-             te->lang != LANG_NONE ? "" : "");
-    strncpy(te->status_msg, buf, sizeof(te->status_msg) - 1);
+static NvColor resolve_color(int index, int is_bg) {
+    if (index == VT_COLOR_DEFAULT) return is_bg ? COL_BG : COL_FG;
+    if (index >= 0 && index < 16)  return ANSI_COLORS[index];
+    if (index >= 16 && index < 232) {
+        int i  = index - 16;
+        int b  = i % 6; i /= 6;
+        int g  = i % 6; i /= 6;
+        int r  = i % 6;
+        uint8_t rv = r ? (uint8_t)(r * 40 + 55) : 0;
+        uint8_t gv = g ? (uint8_t)(g * 40 + 55) : 0;
+        uint8_t bv = b ? (uint8_t)(b * 40 + 55) : 0;
+        return NV_COLOR(rv, gv, bv, 0xFF);
+    }
+    if (index >= 232 && index < 256) {
+        uint8_t v = (uint8_t)((index - 232) * 10 + 8);
+        return NV_COLOR(v, v, v, 0xFF);
+    }
+    return is_bg ? COL_BG : COL_FG;
 }
 
 /* -----------------------------------------------------------------------
- * File operations
+ * Selection helpers
  * --------------------------------------------------------------------- */
 
-static void file_new(TextEditor *te) {
-    if (buffer_modified(te->buf)) {
-        if (nv_dialog_confirm("Unsaved changes",
-                              "Discard changes and open a new file?") != 1) return;
+static int sel_contains(Terminal *t, int col, int row) {
+    if (!t->sel_active) return 0;
+    int r0 = t->sel_start_row, c0 = t->sel_start_col;
+    int r1 = t->sel_end_row,   c1 = t->sel_end_col;
+    if (r0 > r1 || (r0 == r1 && c0 > c1)) {
+        int tmp; tmp = r0; r0 = r1; r1 = tmp;
+                 tmp = c0; c0 = c1; c1 = tmp;
     }
-    buffer_free(te->buf);
-    te->buf = buffer_new();
-    syntax_state_free(te->syntax);
-    te->lang   = LANG_NONE;
-    te->syntax = syntax_state_new(LANG_NONE);
-    te->scroll_line = 0;
-    te->scroll_col  = 0;
-    nv_window_set_title(te->window, "Text Editor — untitled");
-    update_status(te);
-    nv_surface_invalidate(te->surface);
+    if (row < r0 || row > r1) return 0;
+    if (row == r0 && col < c0) return 0;
+    if (row == r1 && col > c1) return 0;
+    return 1;
 }
 
-static void file_open(TextEditor *te, const char *path) {
-    if (buffer_modified(te->buf)) {
-        if (nv_dialog_confirm("Unsaved changes",
-                              "Discard changes and open file?") != 1) return;
+static char *sel_copy_text(Terminal *t) {
+    if (!t->sel_active) return NULL;
+    int r0 = t->sel_start_row, c0 = t->sel_start_col;
+    int r1 = t->sel_end_row,   c1 = t->sel_end_col;
+    if (r0 > r1 || (r0 == r1 && c0 > c1)) {
+        int tmp; tmp = r0; r0 = r1; r1 = tmp;
+                 tmp = c0; c0 = c1; c1 = tmp;
     }
-    if (buffer_load(te->buf, path) < 0) {
-        char msg[512];
-        snprintf(msg, sizeof(msg), "Failed to open: %s", path);
-        set_status(te, msg);
-        return;
-    }
-    syntax_state_free(te->syntax);
-    te->lang   = syntax_detect(path);
-    te->syntax = syntax_state_new(te->lang);
-    te->scroll_line = 0;
-    te->scroll_col  = 0;
-
-    char title[512];
-    const char *name = strrchr(path, '/');
-    name = name ? name + 1 : path;
-    snprintf(title, sizeof(title), "Text Editor — %s", name);
-    nv_window_set_title(te->window, title);
-
-    update_status(te);
-    nv_surface_invalidate(te->surface);
-}
-
-static void file_open_dialog(TextEditor *te) {
-    char path[1024] = {0};
-    if (nv_dialog_open_file("Open File", path, sizeof(path), "*") != 1) return;
-    if (path[0]) file_open(te, path);
-}
-
-static void file_save(TextEditor *te) {
-    if (!buffer_filename(te->buf)) {
-        char path[1024] = {0};
-        if (nv_dialog_save_file("Save File", path, sizeof(path)) != 1) return;
-        if (!path[0]) return;
-        if (buffer_save(te->buf, path) < 0) {
-            set_status(te, "Save failed");
-            return;
+    char *buf = malloc(COLS * (r1 - r0 + 1) * 4 + 8);
+    if (!buf) return NULL;
+    int pos = 0;
+    for (int row = r0; row <= r1; row++) {
+        int col_start = (row == r0) ? c0 : 0;
+        int col_end   = (row == r1) ? c1 : COLS - 1;
+        for (int col = col_start; col <= col_end; col++) {
+            VtCell *cell = vt100_cell(t->vt, col, row);
+            if (cell && cell->codepoint >= 32)
+                buf[pos++] = (char)(cell->codepoint & 0x7F);
+            else
+                buf[pos++] = ' ';
         }
-    } else {
-        if (buffer_save(te->buf, NULL) < 0) {
-            set_status(te, "Save failed");
-            return;
-        }
+        if (row < r1) buf[pos++] = '\n';
     }
-    update_status(te);
-    nv_surface_invalidate(te->surface);
-}
-
-static void file_save_as(TextEditor *te) {
-    char path[1024] = {0};
-    if (nv_dialog_save_file("Save As", path, sizeof(path)) != 1) return;
-    if (!path[0]) return;
-    if (buffer_save(te->buf, path) < 0) {
-        set_status(te, "Save failed");
-        return;
-    }
-    syntax_state_free(te->syntax);
-    te->lang   = syntax_detect(path);
-    te->syntax = syntax_state_new(te->lang);
-    update_status(te);
-    nv_surface_invalidate(te->surface);
-}
-
-/* -----------------------------------------------------------------------
- * Find
- * --------------------------------------------------------------------- */
-
-static void find_next(TextEditor *te) {
-    if (!te->find_query[0]) return;
-    size_t len = strlen(te->find_query);
-    size_t from = buffer_cursor(te->buf) + 1;
-    size_t found = buffer_find(te->buf, from, te->find_query, len, 0);
-    if (found == BUFFER_NPOS)
-        found = buffer_find(te->buf, 0, te->find_query, len, 0);
-    if (found != BUFFER_NPOS) {
-        buffer_cursor_set(te->buf, found);
-        te->find_pos = found;
-        ensure_cursor_visible(te);
-        nv_surface_invalidate(te->surface);
-    } else {
-        set_status(te, "Not found");
-    }
-}
-
-static void find_prev(TextEditor *te) {
-    if (!te->find_query[0]) return;
-    size_t len = strlen(te->find_query);
-    size_t from = buffer_cursor(te->buf);
-    size_t found = buffer_find_prev(te->buf, from, te->find_query, len, 0);
-    if (found != BUFFER_NPOS) {
-        buffer_cursor_set(te->buf, found);
-        te->find_pos = found;
-        ensure_cursor_visible(te);
-        nv_surface_invalidate(te->surface);
-    } else {
-        set_status(te, "Not found");
-    }
-}
-
-static void find_prompt(TextEditor *te) {
-    char query[256] = {0};
-    if (nv_dialog_input("Find", "Search for:", query, sizeof(query)) != 1) return;
-    if (!query[0]) return;
-    strncpy(te->find_query, query, sizeof(te->find_query) - 1);
-    te->find_active = 1;
-    te->find_pos    = BUFFER_NPOS;
-    find_next(te);
-}
-
-static void replace_prompt(TextEditor *te) {
-    char needle[256]      = {0};
-    char replacement[256] = {0};
-    if (nv_dialog_input("Find", "Find:", needle, sizeof(needle)) != 1) return;
-    if (!needle[0]) return;
-    if (nv_dialog_input("Replace", "Replace with:", replacement, sizeof(replacement)) != 1) return;
-
-    int count = buffer_replace_all(te->buf, needle, strlen(needle),
-                                   replacement, strlen(replacement), 0);
-    char msg[64];
-    snprintf(msg, sizeof(msg), "Replaced %d occurrence%s", count, count == 1 ? "" : "s");
-    set_status(te, msg);
-    ensure_cursor_visible(te);
-    nv_surface_invalidate(te->surface);
+    buf[pos] = '\0';
+    return buf;
 }
 
 /* -----------------------------------------------------------------------
  * Drawing
  * --------------------------------------------------------------------- */
 
-static void draw_toolbar(TextEditor *te) {
-    NvRect bg = {0, 0, WINDOW_W, TOOLBAR_H};
-    nv_draw_fill_rect(te->surface, &bg, COL_TOOLBAR_BG);
-    NvRect border = {0, TOOLBAR_H - 1, WINDOW_W, 1};
-    nv_draw_fill_rect(te->surface, &border, COL_BORDER);
+static void draw_cell(Terminal *t, int col, int row, VtCell *cell, int cursor) {
+    int x = PADDING + col * CELL_W;
+    int y = PADDING + row * CELL_H;
 
-    struct { int x; const char *label; } btns[] = {
-        {  4, "New"     },
-        { 52, "Open"    },
-        {104, "Save"    },
-        {152, "Save As" },
-        {232, "Undo"    },
-        {280, "Redo"    },
-        {328, "Find"    },
-        {372, "Replace" },
-        { -1, NULL      },
-    };
+    NvColor bg = resolve_color(cell ? cell->bg : VT_COLOR_DEFAULT, 1);
+    NvColor fg = resolve_color(cell ? cell->fg : VT_COLOR_DEFAULT, 0);
 
-    for (int i = 0; btns[i].label; i++) {
-        int bw = (int)strlen(btns[i].label) * 8 + 14;
-        NvRect r = {btns[i].x, 4, bw, 28};
-        nv_draw_fill_rect(te->surface, &r, COL_BTN_BG);
-        nv_draw_rect(te->surface, &r, COL_BORDER);
-        nv_draw_text(te->surface, btns[i].x + 7, 11, btns[i].label, COL_BTN_FG);
-    }
-}
-
-static void draw_gutter(TextEditor *te, int first_line, int last_line) {
-    NvRect gutter = {0, CONTENT_Y, GUTTER_W, CONTENT_H};
-    nv_draw_fill_rect(te->surface, &gutter, COL_GUTTER_BG);
-    NvRect border = {GUTTER_W - 1, CONTENT_Y, 1, CONTENT_H};
-    nv_draw_fill_rect(te->surface, &border, COL_BORDER);
-
-    int cur_line, cur_col;
-    buffer_pos_to_lc(te->buf, buffer_cursor(te->buf), &cur_line, &cur_col);
-
-    for (int i = first_line; i < last_line; i++) {
-        int y = CONTENT_Y + (i - first_line) * CELL_H;
-        char num[16];
-        snprintf(num, sizeof(num), "%d", i + 1);
-        int nw = (int)strlen(num) * CELL_W;
-        NvColor fg = (i == cur_line)
-                     ? NV_COLOR(0xCC, 0xCC, 0xCC, 0xFF)
-                     : COL_GUTTER_FG;
-        nv_draw_text(te->surface, GUTTER_W - nw - 6, y + 2, num, fg);
-    }
-}
-
-static void draw_content(TextEditor *te) {
-    int line_count  = buffer_line_count(te->buf);
-    int first_line  = te->scroll_line;
-    int last_line   = first_line + VISIBLE_ROWS;
-    if (last_line > line_count) last_line = line_count;
-
-    int cur_line, cur_col;
-    buffer_pos_to_lc(te->buf, buffer_cursor(te->buf), &cur_line, &cur_col);
-
-    size_t sel_start = 0, sel_end = 0;
-    int has_sel = buffer_has_selection(te->buf);
-    if (has_sel) buffer_selection_range(te->buf, &sel_start, &sel_end);
-
-    syntax_reset(te->syntax);
-
-    for (int row = 0; row < first_line; row++) {
-        char *text = buffer_line_text(te->buf, row);
-        if (text) {
-            syntax_highlight_line(te->syntax, text, (int)strlen(text));
-            free(text);
-        }
+    if (cell && cell->attrs & VT_ATTR_REVERSE) {
+        NvColor tmp = bg; bg = fg; fg = tmp;
     }
 
-    for (int row = first_line; row < last_line; row++) {
-        int screen_y = CONTENT_Y + (row - first_line) * CELL_H;
+    if (sel_contains(t, col, row)) bg = COL_SELECT;
 
-        if (row == cur_line) {
-            NvRect hl = {GUTTER_W, screen_y, WINDOW_W - GUTTER_W, CELL_H};
-            nv_draw_fill_rect(te->surface, &hl, COL_CURLINE_BG);
-        }
+    NvRect cell_rect = { x, y, CELL_W, CELL_H };
+    nv_draw_fill_rect(t->surface, &cell_rect, bg);
 
-        char *text = buffer_line_text(te->buf, row);
-        int text_len = text ? (int)strlen(text) : 0;
-
-        if (text) syntax_highlight_line(te->syntax, text, text_len);
-
-        size_t line_start = buffer_line_start(te->buf, row);
-        size_t line_end   = buffer_line_end(te->buf, row);
-
-        for (int col = te->scroll_col; col < te->scroll_col + VISIBLE_COLS; col++) {
-            int screen_x = CONTENT_X + (col - te->scroll_col) * CELL_W;
-            size_t char_pos = line_start + col;
-
-            int in_sel = has_sel && char_pos >= sel_start && char_pos < sel_end;
-            int in_find = te->find_active && te->find_query[0] &&
-                          te->find_pos != BUFFER_NPOS &&
-                          char_pos >= te->find_pos &&
-                          char_pos < te->find_pos + strlen(te->find_query);
-
-            NvColor bg = COL_BG;
-            if (row == cur_line) bg = COL_CURLINE_BG;
-            if (in_sel)  bg = COL_SELECTION;
-            if (in_find) bg = COL_FIND_HL;
-
-            NvRect cell_rect = {screen_x, screen_y, CELL_W, CELL_H};
-            nv_draw_fill_rect(te->surface, &cell_rect, bg);
-
-            if (text && col < text_len) {
-                SyntaxTokenType tok = syntax_token_at(te->syntax, col);
-                NvColor fg = SYN_COLORS[tok < 16 ? tok : 0];
-                char glyph[2] = { text[col], '\0' };
-                int bold = (tok == TOK_KEYWORD || tok == TOK_HEADING1);
-                nv_draw_text_styled(te->surface, screen_x, screen_y,
-                                    glyph, fg, CELL_H, bold, 0);
-            }
-
-            if (row == cur_line && col == cur_col) {
-                NvRect cur_rect = {screen_x, screen_y + CELL_H - 2, CELL_W, 2};
-                nv_draw_fill_rect(te->surface, &cur_rect, COL_CURSOR);
-            }
-        }
-
-        free(text);
+    if (cursor && t->blink_on) {
+        NvRect cur_rect = { x, y + CELL_H - 2, CELL_W, 2 };
+        nv_draw_fill_rect(t->surface, &cur_rect, COL_CURSOR);
     }
 
-    draw_gutter(te, first_line, last_line);
-}
+    if (!cell || cell->codepoint < 32) return;
 
-static void draw_statusbar(TextEditor *te) {
-    int y = WINDOW_H - STATUSBAR_H;
-    NvRect bg = {0, y, WINDOW_W, STATUSBAR_H};
-    nv_draw_fill_rect(te->surface, &bg, COL_STATUS_BG);
-    nv_draw_text(te->surface, 8, y + 3, te->status_msg, COL_STATUS_FG);
+    char glyph[2] = { (char)(cell->codepoint & 0xFF), '\0' };
+    int bold      = (cell->attrs & VT_ATTR_BOLD) ? 1 : 0;
+    int underline = (cell->attrs & VT_ATTR_UNDERLINE) ? 1 : 0;
+
+    nv_draw_text_styled(t->surface, x, y, glyph, fg, CELL_H, bold, 0);
+
+    if (underline) {
+        NvRect ul = { x, y + CELL_H - 1, CELL_W, 1 };
+        nv_draw_fill_rect(t->surface, &ul, fg);
+    }
 }
 
 static void on_paint(NvWindow *win, NvSurface *surface, void *userdata) {
     (void)win;
-    TextEditor *te = (TextEditor *)userdata;
-    te->surface = surface;
+    Terminal *t = (Terminal *)userdata;
+    t->surface = surface;
 
-    NvRect bg = {0, 0, WINDOW_W, WINDOW_H};
+    NvRect bg = { 0, 0, WINDOW_W, WINDOW_H };
     nv_draw_fill_rect(surface, &bg, COL_BG);
 
-    draw_toolbar(te);
-    draw_content(te);
-    draw_statusbar(te);
+    int cur_col = vt100_cursor_col(t->vt);
+    int cur_row = vt100_cursor_row(t->vt);
+
+    for (int row = 0; row < ROWS; row++) {
+        for (int col = 0; col < COLS; col++) {
+            VtCell *cell = vt100_cell(t->vt, col, row);
+            int is_cursor = (col == cur_col && row == cur_row);
+            draw_cell(t, col, row, cell, is_cursor);
+        }
+    }
 }
 
 /* -----------------------------------------------------------------------
- * Toolbar hit test
+ * PTY read callback — called when shell writes output
  * --------------------------------------------------------------------- */
 
-typedef enum {
-    TB_NONE, TB_NEW, TB_OPEN, TB_SAVE, TB_SAVE_AS,
-    TB_UNDO, TB_REDO, TB_FIND, TB_REPLACE,
-} ToolbarBtn;
-
-static ToolbarBtn toolbar_hit(int x, int y) {
-    if (y < 4 || y > 32) return TB_NONE;
-    if (x >=   4 && x <  48) return TB_NEW;
-    if (x >=  52 && x < 100) return TB_OPEN;
-    if (x >= 104 && x < 148) return TB_SAVE;
-    if (x >= 152 && x < 228) return TB_SAVE_AS;
-    if (x >= 232 && x < 276) return TB_UNDO;
-    if (x >= 280 && x < 324) return TB_REDO;
-    if (x >= 328 && x < 368) return TB_FIND;
-    if (x >= 372 && x < 444) return TB_REPLACE;
-    return TB_NONE;
+static void on_pty_data(const char *buf, int len, void *userdata) {
+    Terminal *t = (Terminal *)userdata;
+    vt100_feed(t->vt, buf, len);
+    nv_surface_invalidate(t->surface);
 }
 
 /* -----------------------------------------------------------------------
  * Input
  * --------------------------------------------------------------------- */
 
-static void on_mouse_down(NvWindow *win, NvMouseEvent *ev, void *userdata) {
-    (void)win;
-    TextEditor *te = (TextEditor *)userdata;
-
-    if (ev->y < TOOLBAR_H) {
-        ToolbarBtn btn = toolbar_hit(ev->x, ev->y);
-        switch (btn) {
-            case TB_NEW:     file_new(te);          break;
-            case TB_OPEN:    file_open_dialog(te);  break;
-            case TB_SAVE:    file_save(te);         break;
-            case TB_SAVE_AS: file_save_as(te);      break;
-            case TB_UNDO:    buffer_undo(te->buf);  break;
-            case TB_REDO:    buffer_redo(te->buf);  break;
-            case TB_FIND:    find_prompt(te);       break;
-            case TB_REPLACE: replace_prompt(te);    break;
-            default: break;
-        }
-        update_status(te);
-        nv_surface_invalidate(te->surface);
-        return;
-    }
-
-    if (ev->x < GUTTER_W) return;
-
-    int col = (ev->x - CONTENT_X) / CELL_W + te->scroll_col;
-    int row = (ev->y - CONTENT_Y) / CELL_H + te->scroll_line;
-    size_t pos = buffer_lc_to_pos(te->buf, row, col);
-
-    if (ev->mod & NV_MOD_SHIFT) {
-        if (!buffer_has_selection(te->buf))
-            buffer_mark_set(te->buf, buffer_cursor(te->buf));
-        buffer_cursor_set(te->buf, pos);
-    } else {
-        buffer_mark_clear(te->buf);
-        buffer_cursor_set(te->buf, pos);
-    }
-
-    update_status(te);
-    nv_surface_invalidate(te->surface);
-}
-
-static void on_scroll(NvWindow *win, NvScrollEvent *ev, void *userdata) {
-    (void)win; (void)ev;
-    TextEditor *te = (TextEditor *)userdata;
-    te->scroll_line += ev->delta_y * 3;
-    if (te->scroll_line < 0) te->scroll_line = 0;
-    int max = buffer_line_count(te->buf) - 1;
-    if (te->scroll_line > max) te->scroll_line = max;
-    nv_surface_invalidate(te->surface);
-}
-
 static void on_key_down(NvWindow *win, NvKeyEvent *ev, void *userdata) {
     (void)win;
-    TextEditor *te = (TextEditor *)userdata;
-    Buffer *b = te->buf;
+    Terminal *t = (Terminal *)userdata;
 
-    if (ev->mod & NV_MOD_CTRL) {
-        switch (ev->key) {
-            case 'n': case 'N': file_new(te);                    return;
-            case 'o': case 'O': file_open_dialog(te);            return;
-            case 's': case 'S':
-                if (ev->mod & NV_MOD_SHIFT) file_save_as(te);
-                else                         file_save(te);
-                return;
-            case 'z': case 'Z': buffer_undo(b);                  break;
-            case 'y': case 'Y': buffer_redo(b);                  break;
-            case 'a': case 'A':
-                buffer_mark_set(b, 0);
-                buffer_cursor_set(b, buffer_length(b));
-                break;
-            case 'c': case 'C': {
-                char *text; size_t len;
-                if (buffer_copy(b, &text, &len) == 0) {
-                    nv_clipboard_set(text); free(text);
-                }
-                break;
-            }
-            case 'x': case 'X': {
-                char *text; size_t len;
-                if (buffer_cut(b, &text, &len) == 0) {
-                    nv_clipboard_set(text); free(text);
-                }
-                break;
-            }
-            case 'v': case 'V': {
-                char *text = nv_clipboard_get();
-                if (text) { buffer_paste(b, text, strlen(text)); free(text); }
-                break;
-            }
-            case 'f': case 'F': find_prompt(te);                 return;
-            case 'h': case 'H': replace_prompt(te);              return;
-            case 'g': case 'G': {
-                char line_str[32] = {0};
-                if (nv_dialog_input("Go to line", "Line number:",
-                                    line_str, sizeof(line_str)) == 1) {
-                    int ln = atoi(line_str) - 1;
-                    buffer_cursor_set(b, buffer_lc_to_pos(b, ln, 0));
-                    ensure_cursor_visible(te);
-                }
-                break;
-            }
-            default: break;
+    if (ev->mod & NV_MOD_CTRL && ev->mod & NV_MOD_SHIFT) {
+        if (ev->key == 'C' || ev->key == 'c') {
+            char *text = sel_copy_text(t);
+            if (text) { nv_clipboard_set(text); free(text); }
+            return;
         }
-        ensure_cursor_visible(te);
-        update_status(te);
-        nv_surface_invalidate(te->surface);
-        return;
+        if (ev->key == 'V' || ev->key == 'v') {
+            char *text = nv_clipboard_get();
+            if (text) { pty_write(t->pty, text, strlen(text)); free(text); }
+            return;
+        }
     }
+
+    char seq[16] = {0};
+    int  seq_len = 0;
 
     switch (ev->key) {
-        case NV_KEY_RETURN: {
-            if (buffer_has_selection(b)) buffer_delete_selection(b);
-            size_t pos = buffer_cursor(b);
-            buffer_insert_char(b, pos, '\n');
-            buffer_cursor_set(b, pos + 1);
-            break;
-        }
-        case NV_KEY_BACKSPACE:
-            if (buffer_has_selection(b)) {
-                buffer_delete_selection(b);
-            } else {
-                size_t pos = buffer_cursor(b);
-                if (pos > 0) {
-                    buffer_delete_char_before(b, pos);
-                    buffer_cursor_set(b, pos - 1);
-                }
-            }
-            break;
-        case NV_KEY_DELETE:
-            if (buffer_has_selection(b)) {
-                buffer_delete_selection(b);
-            } else {
-                buffer_delete_char_after(b, buffer_cursor(b));
-            }
-            break;
-        case NV_KEY_TAB:
-            if (buffer_has_selection(b)) buffer_delete_selection(b);
-            buffer_insert(b, buffer_cursor(b), "    ", 4);
-            buffer_cursor_move(b, 4);
-            break;
-        case NV_KEY_LEFT:
-            if (ev->mod & NV_MOD_SHIFT) {
-                if (!buffer_has_selection(b))
-                    buffer_mark_set(b, buffer_cursor(b));
-                buffer_cursor_move(b, -1);
-            } else {
-                buffer_mark_clear(b);
-                if (ev->mod & NV_MOD_CTRL) buffer_cursor_word_back(b);
-                else buffer_cursor_move(b, -1);
-            }
-            break;
-        case NV_KEY_RIGHT:
-            if (ev->mod & NV_MOD_SHIFT) {
-                if (!buffer_has_selection(b))
-                    buffer_mark_set(b, buffer_cursor(b));
-                buffer_cursor_move(b, 1);
-            } else {
-                buffer_mark_clear(b);
-                if (ev->mod & NV_MOD_CTRL) buffer_cursor_word_forward(b);
-                else buffer_cursor_move(b, 1);
-            }
-            break;
-        case NV_KEY_UP:
-            if (ev->mod & NV_MOD_SHIFT) {
-                if (!buffer_has_selection(b))
-                    buffer_mark_set(b, buffer_cursor(b));
-            } else {
-                buffer_mark_clear(b);
-            }
-            buffer_cursor_line(b, -1);
-            break;
-        case NV_KEY_DOWN:
-            if (ev->mod & NV_MOD_SHIFT) {
-                if (!buffer_has_selection(b))
-                    buffer_mark_set(b, buffer_cursor(b));
-            } else {
-                buffer_mark_clear(b);
-            }
-            buffer_cursor_line(b, 1);
-            break;
-        case NV_KEY_HOME:
-            if (ev->mod & NV_MOD_SHIFT) {
-                if (!buffer_has_selection(b))
-                    buffer_mark_set(b, buffer_cursor(b));
-            } else {
-                buffer_mark_clear(b);
-            }
-            buffer_cursor_home(b);
-            break;
-        case NV_KEY_END:
-            if (ev->mod & NV_MOD_SHIFT) {
-                if (!buffer_has_selection(b))
-                    buffer_mark_set(b, buffer_cursor(b));
-            } else {
-                buffer_mark_clear(b);
-            }
-            buffer_cursor_end(b);
-            break;
-        case NV_KEY_PAGE_UP:
-            buffer_cursor_line(b, -VISIBLE_ROWS);
-            te->scroll_line -= VISIBLE_ROWS;
-            if (te->scroll_line < 0) te->scroll_line = 0;
-            break;
-        case NV_KEY_PAGE_DOWN:
-            buffer_cursor_line(b, VISIBLE_ROWS);
-            break;
-        case NV_KEY_F3:
-            if (ev->mod & NV_MOD_SHIFT) find_prev(te);
-            else                         find_next(te);
-            return;
+        case NV_KEY_RETURN:    seq[0] = '\r'; seq_len = 1; break;
+        case NV_KEY_BACKSPACE: seq[0] = 0x7F; seq_len = 1; break;
+        case NV_KEY_TAB:       seq[0] = '\t'; seq_len = 1; break;
+        case NV_KEY_ESCAPE:    seq[0] = 0x1B; seq_len = 1; break;
+
+        case NV_KEY_UP:    memcpy(seq, "\x1B[A", 3); seq_len = 3; break;
+        case NV_KEY_DOWN:  memcpy(seq, "\x1B[B", 3); seq_len = 3; break;
+        case NV_KEY_RIGHT: memcpy(seq, "\x1B[C", 3); seq_len = 3; break;
+        case NV_KEY_LEFT:  memcpy(seq, "\x1B[D", 3); seq_len = 3; break;
+
+        case NV_KEY_HOME:   memcpy(seq, "\x1B[H",   3); seq_len = 3; break;
+        case NV_KEY_END:    memcpy(seq, "\x1B[F",   3); seq_len = 3; break;
+        case NV_KEY_PAGE_UP:  memcpy(seq, "\x1B[5~", 4); seq_len = 4; break;
+        case NV_KEY_PAGE_DOWN:memcpy(seq, "\x1B[6~", 4); seq_len = 4; break;
+        case NV_KEY_INSERT:   memcpy(seq, "\x1B[2~", 4); seq_len = 4; break;
+        case NV_KEY_DELETE:   memcpy(seq, "\x1B[3~", 4); seq_len = 4; break;
+
+        case NV_KEY_F1:  memcpy(seq, "\x1BOP",   3); seq_len = 3; break;
+        case NV_KEY_F2:  memcpy(seq, "\x1BOQ",   3); seq_len = 3; break;
+        case NV_KEY_F3:  memcpy(seq, "\x1BOR",   3); seq_len = 3; break;
+        case NV_KEY_F4:  memcpy(seq, "\x1BOS",   3); seq_len = 3; break;
+        case NV_KEY_F5:  memcpy(seq, "\x1B[15~", 5); seq_len = 5; break;
+        case NV_KEY_F6:  memcpy(seq, "\x1B[17~", 5); seq_len = 5; break;
+        case NV_KEY_F7:  memcpy(seq, "\x1B[18~", 5); seq_len = 5; break;
+        case NV_KEY_F8:  memcpy(seq, "\x1B[19~", 5); seq_len = 5; break;
+        case NV_KEY_F9:  memcpy(seq, "\x1B[20~", 5); seq_len = 5; break;
+        case NV_KEY_F10: memcpy(seq, "\x1B[21~", 5); seq_len = 5; break;
+        case NV_KEY_F11: memcpy(seq, "\x1B[23~", 5); seq_len = 5; break;
+        case NV_KEY_F12: memcpy(seq, "\x1B[24~", 5); seq_len = 5; break;
+
         default:
-            if (ev->codepoint >= 32 && ev->codepoint < 127) {
-                if (buffer_has_selection(b)) buffer_delete_selection(b);
-                size_t pos = buffer_cursor(b);
-                char c = (char)ev->codepoint;
-                buffer_insert_char(b, pos, c);
-                buffer_cursor_move(b, 1);
+            if (ev->mod & NV_MOD_CTRL && ev->codepoint >= 'a' && ev->codepoint <= 'z') {
+                seq[0] = (char)(ev->codepoint - 'a' + 1);
+                seq_len = 1;
+            } else if (ev->mod & NV_MOD_CTRL && ev->codepoint >= 'A' && ev->codepoint <= 'Z') {
+                seq[0] = (char)(ev->codepoint - 'A' + 1);
+                seq_len = 1;
+            } else if (ev->codepoint >= 32 && ev->codepoint < 127) {
+                seq[0] = (char)ev->codepoint;
+                seq_len = 1;
             }
             break;
     }
 
-    ensure_cursor_visible(te);
-    update_status(te);
-    nv_surface_invalidate(te->surface);
+    if (seq_len > 0) pty_write(t->pty, seq, seq_len);
+}
+
+static void on_mouse_down(NvWindow *win, NvMouseEvent *ev, void *userdata) {
+    (void)win;
+    Terminal *t = (Terminal *)userdata;
+    if (ev->button != NV_MOUSE_LEFT) return;
+
+    int col = (ev->x - PADDING) / CELL_W;
+    int row = (ev->y - PADDING) / CELL_H;
+    if (col < 0) col = 0; if (col >= COLS) col = COLS - 1;
+    if (row < 0) row = 0; if (row >= ROWS) row = ROWS - 1;
+
+    t->sel_active    = 1;
+    t->sel_dragging  = 1;
+    t->sel_start_col = col;
+    t->sel_start_row = row;
+    t->sel_end_col   = col;
+    t->sel_end_row   = row;
+    nv_surface_invalidate(t->surface);
+}
+
+static void on_mouse_up(NvWindow *win, NvMouseEvent *ev, void *userdata) {
+    (void)win; (void)ev;
+    Terminal *t = (Terminal *)userdata;
+    t->sel_dragging = 0;
+}
+
+static void on_mouse_move(NvWindow *win, NvMouseEvent *ev, void *userdata) {
+    (void)win;
+    Terminal *t = (Terminal *)userdata;
+    if (!t->sel_dragging) return;
+
+    int col = (ev->x - PADDING) / CELL_W;
+    int row = (ev->y - PADDING) / CELL_H;
+    if (col < 0) col = 0; if (col >= COLS) col = COLS - 1;
+    if (row < 0) row = 0; if (row >= ROWS) row = ROWS - 1;
+
+    t->sel_end_col = col;
+    t->sel_end_row = row;
+    nv_surface_invalidate(t->surface);
+}
+
+static void on_timer(void *userdata) {
+    Terminal *t = (Terminal *)userdata;
+    t->blink_ticks++;
+    if (t->blink_ticks >= BLINK_MS / 16) {
+        t->blink_ticks = 0;
+        t->blink_on    = !t->blink_on;
+        nv_surface_invalidate(t->surface);
+    }
+    int n = pty_poll(t->pty);
+    if (n > 0) nv_surface_invalidate(t->surface);
 }
 
 /* -----------------------------------------------------------------------
@@ -680,31 +329,32 @@ static void on_key_down(NvWindow *win, NvKeyEvent *ev, void *userdata) {
  * --------------------------------------------------------------------- */
 
 int main(int argc, char **argv) {
-    memset(&g_ed, 0, sizeof(TextEditor));
+    (void)argc; (void)argv;
 
-    g_ed.buf    = buffer_new();
-    g_ed.lang   = LANG_NONE;
-    g_ed.syntax = syntax_state_new(LANG_NONE);
-    g_ed.find_pos = BUFFER_NPOS;
+    memset(&g_term, 0, sizeof(Terminal));
+    g_term.blink_on = 1;
 
-    if (!g_ed.buf || !g_ed.syntax) return 1;
+    g_term.vt = vt100_new(COLS, ROWS, SCROLLBACK);
+    if (!g_term.vt) return 1;
+
+    g_term.pty = pty_open(COLS, ROWS, on_pty_data, &g_term);
+    if (!g_term.pty) { vt100_free(g_term.vt); return 1; }
 
     NvWindowConfig cfg;
-    cfg.title    = "Text Editor";
+    cfg.title    = "Terminal";
     cfg.width    = WINDOW_W;
     cfg.height   = WINDOW_H;
     cfg.resizable = 0;
 
-    g_ed.window = nv_window_create(&cfg);
-    if (!g_ed.window) return 1;
+    g_term.window = nv_window_create(&cfg);
+    if (!g_term.window) return 1;
 
-    nv_window_on_paint(g_ed.window,      on_paint,     &g_ed);
-    nv_window_on_mouse_down(g_ed.window, on_mouse_down,&g_ed);
-    nv_window_on_scroll(g_ed.window,     on_scroll,    &g_ed);
-    nv_window_on_key_down(g_ed.window,   on_key_down,  &g_ed);
-
-    if (argc > 1) file_open(&g_ed, argv[1]);
-    update_status(&g_ed);
+    nv_window_on_paint(g_term.window,      on_paint,     &g_term);
+    nv_window_on_key_down(g_term.window,   on_key_down,  &g_term);
+    nv_window_on_mouse_down(g_term.window, on_mouse_down,&g_term);
+    nv_window_on_mouse_up(g_term.window,   on_mouse_up,  &g_term);
+    nv_window_on_mouse_move(g_term.window, on_mouse_move,&g_term);
+    nv_timer_set(16, on_timer, &g_term);
 
     return nv_app_run();
 }
