@@ -1,0 +1,6 @@
+boot/iso/boot/limine/limine-bios.sys
+boot/iso/boot/limine/limine-bios-cd.bin
+boot/iso/boot/limine/limine-uefi-cd.bin
+boot/iso/EFI/BOOT/BOOTX64.EFI
+boot/iso/kernel.elf
+build/
