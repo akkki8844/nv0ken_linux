@@ -11,7 +11,7 @@ a 64-bit x86_64 operating system built from scratch. boots via the limine bootlo
 sudo apt install build-essential nasm qemu-system-x86 xorriso git
 
 # clone
-git clone https://github.com/yourname/nv0ken_linux.git
+git clone https://github.com/akkki8844/nv0ken_linux.git
 cd nv0ken_linux
 
 # build and run
