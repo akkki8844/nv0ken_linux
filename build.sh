@@ -71,7 +71,7 @@ fi
 check_tools() {
     log "checking toolchain"
     local missing=0
-    for tool in gcc nasm qemu-system-x86_64 xorriso; do
+    for tool in "$@"; do
         if ! command -v "$tool" &>/dev/null; then
             warn "missing: $tool"
             missing=1
@@ -206,12 +206,12 @@ case "$TARGET" in
         ;;
 
     kernel)
-        check_tools
+        check_tools gcc nasm ld
         build_kernel
         ;;
 
     userland)
-        check_tools
+        check_tools gcc nasm ar
         build_libc
         build_init
         build_shell
@@ -219,20 +219,20 @@ case "$TARGET" in
         ;;
 
     libnv0)
-        check_tools
+        check_tools gcc nasm ar
         build_libc
         build_libnv0
         ;;
 
     graphics)
-        check_tools
+        check_tools gcc nasm ar
         build_libc
         build_libnv0
         build_graphics
         ;;
 
     apps)
-        check_tools
+        check_tools gcc nasm ar
         build_libc
         build_libnv0
         build_apps
@@ -243,7 +243,7 @@ case "$TARGET" in
         ;;
 
     run)
-        check_tools
+        check_tools gcc nasm ar ld qemu-system-x86_64 xorriso
         build_kernel
         build_libc
         build_libnv0
@@ -258,7 +258,7 @@ case "$TARGET" in
         ;;
 
     run-debug)
-        check_tools
+        check_tools gcc nasm ar ld qemu-system-x86_64 xorriso
         build_kernel
         build_libc
         build_libnv0
@@ -273,7 +273,7 @@ case "$TARGET" in
         ;;
 
     all)
-        check_tools
+        check_tools gcc nasm ar ld xorriso
         build_kernel
         build_libc
         build_libnv0
