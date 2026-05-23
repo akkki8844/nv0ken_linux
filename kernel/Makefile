@@ -8,7 +8,7 @@ CFLAGS  := $(FREESTANDING_CFLAGS) -mcmodel=kernel -I. -I$(ROOT)/boot
 ASFLAGS := -f elf64
 LDFLAGS := -nostdlib -static -z max-page-size=0x1000 -T kernel.ld
 
-SRC_C := $(shell find . -name '*.c' -not -path './arch/x86_64/apic.c' -not -path './arch/x86_64/smp.c')
+SRC_C := $(shell find . -name '*.c')
 SRC_ASM := $(shell find . -name '*.asm')
 
 OBJ_C := $(patsubst ./%.c,$(OUT)/%.o,$(SRC_C))
