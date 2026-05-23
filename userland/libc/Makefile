@@ -18,6 +18,7 @@ SRC_C = \
     src/ctype.c \
     src/stdlib.c \
     src/stdio.c \
+    src/dirent.c \
     src/unistd.c \
     src/signal.c \
     src/assert.c
