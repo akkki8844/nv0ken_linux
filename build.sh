@@ -29,6 +29,7 @@ targets:
   graphics    build graphics server, WM, desktop
   libnv0      build shared userspace library
   iso         package build/nv0ken.iso (requires kernel built)
+  grub-iso    package build/nv0ken-grub.iso using GRUB multiboot2
   run         build all then launch in QEMU
   run-debug   build all then launch QEMU with GDB stub on :1234
   clean       remove all build artifacts
@@ -57,7 +58,7 @@ while [[ $# -gt 0 ]]; do
         --no-iso) NO_ISO=1; shift ;;
         --kvm) KVM=1; shift ;;
         -h|--help) usage ;;
-        all|kernel|userland|apps|graphics|libnv0|iso|run|run-debug|clean)
+        all|kernel|userland|apps|graphics|libnv0|iso|grub-iso|run|run-debug|clean)
             TARGET="$1"; shift ;;
         *) err "unknown option: $1" ;;
     esac
@@ -160,6 +161,12 @@ build_iso() {
     ok "ISO built -> build/nv0ken.iso"
 }
 
+build_grub_iso() {
+    log "building GRUB ISO"
+    bash "$TOOLS/mkiso_grub.sh" || err "GRUB ISO build failed"
+    ok "GRUB ISO built -> build/nv0ken-grub.iso"
+}
+
 run_qemu() {
     local debug="$1"
     if [[ ! -f "$BUILD/nv0ken.iso" ]]; then
@@ -240,6 +247,11 @@ case "$TARGET" in
 
     iso)
         build_iso
+        ;;
+
+    grub-iso)
+        check_tools grub-mkrescue xorriso
+        build_grub_iso
         ;;
 
     run)

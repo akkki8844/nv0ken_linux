@@ -1,0 +1,19 @@
+set confirm off
+set pagination off
+set disassembly-flavor intel
+
+file build/kernel.elf
+target remote :1234
+
+define regs
+    info registers
+    x/16gx $rsp
+    x/8i $rip
+end
+
+define kbt
+    bt
+    info frame
+end
+
+break kmain

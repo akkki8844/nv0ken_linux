@@ -1,0 +1,18 @@
+#ifndef NV0KEN_NET_TCP_STATES_H
+#define NV0KEN_NET_TCP_STATES_H
+
+typedef enum {
+    TCP_CLOSED,
+    TCP_LISTEN,
+    TCP_SYN_SENT,
+    TCP_SYN_RECEIVED,
+    TCP_ESTABLISHED,
+    TCP_FIN_WAIT_1,
+    TCP_FIN_WAIT_2,
+    TCP_CLOSE_WAIT,
+    TCP_CLOSING,
+    TCP_LAST_ACK,
+    TCP_TIME_WAIT
+} tcp_state_t;
+
+#endif

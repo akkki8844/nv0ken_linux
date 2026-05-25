@@ -9,7 +9,7 @@ ASFLAGS := -f elf64
 LDFLAGS := -nostdlib -static -z max-page-size=0x1000 -T kernel.ld
 
 SRC_C := $(shell find . -name '*.c')
-SRC_ASM := $(shell find . -name '*.asm')
+SRC_ASM := $(shell find . -name '*.asm') ../boot/multiboot2_header.asm
 
 OBJ_C := $(patsubst ./%.c,$(OUT)/%.o,$(SRC_C))
 OBJ_ASM := $(patsubst ./%.asm,$(OUT)/%.o,$(SRC_ASM))
