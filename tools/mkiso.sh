@@ -22,6 +22,11 @@ mkdir -p "$EFI_DIR"
 
 cp "$BUILD/kernel.elf"                    "$ISO_ROOT/kernel.elf"
 cp "$ROOT/boot/limine.conf"               "$LIMINE_DIR/limine.conf"
+if [ -f "$BUILD/initrd.tar" ]; then
+    cp "$BUILD/initrd.tar" "$ISO_ROOT/initrd.tar"
+else
+    printf '\0\0\0\0' > "$ISO_ROOT/initrd.tar"
+fi
 cp "$LIMINE_BIN/limine-bios.sys"          "$LIMINE_DIR/limine-bios.sys"
 cp "$LIMINE_BIN/limine-bios-cd.bin"       "$LIMINE_DIR/limine-bios-cd.bin"
 cp "$LIMINE_BIN/limine-uefi-cd.bin"       "$LIMINE_DIR/limine-uefi-cd.bin"

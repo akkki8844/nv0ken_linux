@@ -20,6 +20,11 @@ rm -rf "$ISO_ROOT"
 mkdir -p "$ISO_ROOT/boot/grub"
 cp "$BUILD/kernel.elf" "$ISO_ROOT/boot/kernel.elf"
 cp "$ROOT/boot/grub.cfg" "$ISO_ROOT/boot/grub/grub.cfg"
+if [[ -f "$BUILD/initrd.tar" ]]; then
+    cp "$BUILD/initrd.tar" "$ISO_ROOT/boot/initrd.tar"
+else
+    printf '\0\0\0\0' > "$ISO_ROOT/boot/initrd.tar"
+fi
 
 grub-mkrescue -o "$OUT" "$ISO_ROOT"
 echo "GRUB ISO built: $OUT"

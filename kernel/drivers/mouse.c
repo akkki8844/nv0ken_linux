@@ -12,18 +12,27 @@ static unsigned packet_index;
 static mouse_event_fn event_handler;
 static void *event_context;
 
-static void wait_input_clear(void)
+static int wait_input_clear(void)
 {
-    while (inb(PS2_STATUS) & 2) {
+    for (unsigned spin = 0; spin < 100000; ++spin) {
+        if ((inb(PS2_STATUS) & 2) == 0) {
+            return 0;
+        }
     }
+    return -1;
 }
 
-static void mouse_write(uint8_t value)
+static int mouse_write(uint8_t value)
 {
-    wait_input_clear();
+    if (wait_input_clear() != 0) {
+        return -1;
+    }
     outb(PS2_CMD, 0xd4);
-    wait_input_clear();
+    if (wait_input_clear() != 0) {
+        return -1;
+    }
     outb(PS2_DATA, value);
+    return 0;
 }
 
 static void mouse_irq(registers_t *regs, void *context)
@@ -51,11 +60,17 @@ static void mouse_irq(registers_t *regs, void *context)
 
 void mouse_init(void)
 {
-    wait_input_clear();
+    if (wait_input_clear() != 0) {
+        return;
+    }
     outb(PS2_CMD, 0xa8);
-    mouse_write(0xf6);
+    if (mouse_write(0xf6) != 0) {
+        return;
+    }
     (void)inb(PS2_DATA);
-    mouse_write(0xf4);
+    if (mouse_write(0xf4) != 0) {
+        return;
+    }
     (void)inb(PS2_DATA);
     irq_register(12, mouse_irq, 0);
 }

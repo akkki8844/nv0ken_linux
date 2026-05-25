@@ -8,6 +8,12 @@ every `kprintf` call writes to both the framebuffer and COM1 serial. when runnin
 bash tools/run_qemu.sh 2>&1 | tee kernel.log
 ```
 
+for the GRUB boot path:
+
+```bash
+bash build.sh run-grub 2>&1 | tee grub-kernel.log
+```
+
 ## GDB + QEMU
 
 ### launch QEMU in debug mode

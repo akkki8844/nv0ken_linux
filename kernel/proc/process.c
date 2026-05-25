@@ -82,6 +82,11 @@ process_t *process_current(void)
     return current_process;
 }
 
+process_t *process_first(void)
+{
+    return process_list;
+}
+
 void process_set_current(process_t *process)
 {
     current_process = process;

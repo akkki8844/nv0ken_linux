@@ -11,6 +11,8 @@ sudo apt install -y \
     gcc \
     nasm \
     qemu-system-x86 \
+    grub-pc-bin \
+    grub-common \
     xorriso \
     mtools \
     git
@@ -23,6 +25,7 @@ gcc --version      # need 10+
 nasm --version     # need 2.14+
 qemu-system-x86_64 --version
 xorriso --version
+grub-mkrescue --version
 ```
 
 ## fetch limine
@@ -58,6 +61,19 @@ bash tools/mkiso.sh
 
 output: `build/nv0ken.iso`
 
+## build the GRUB ISO
+
+```bash
+bash build.sh grub-iso
+```
+
+output: `build/nv0ken-grub.iso`
+
+The GRUB path uses the Multiboot2 header in `boot/multiboot2_header.asm`
+and packages `boot/grub.cfg` plus `build/initrd.tar`. If no initrd exists,
+the packager writes a tiny empty initrd so the boot menu still has a stable
+module path.
+
 ## run in QEMU
 
 ```bash
@@ -78,6 +94,12 @@ qemu-system-x86_64 \
 ```
 
 serial output (kprintf) appears in the terminal you ran this from. framebuffer appears in the QEMU window.
+
+To run the GRUB image:
+
+```bash
+bash build.sh run-grub
+```
 
 ## run with KVM acceleration
 

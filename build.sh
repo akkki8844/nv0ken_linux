@@ -31,6 +31,7 @@ targets:
   iso         package build/nv0ken.iso (requires kernel built)
   grub-iso    package build/nv0ken-grub.iso using GRUB multiboot2
   run         build all then launch in QEMU
+  run-grub    build GRUB ISO then launch in QEMU
   run-debug   build all then launch QEMU with GDB stub on :1234
   clean       remove all build artifacts
 
@@ -58,7 +59,7 @@ while [[ $# -gt 0 ]]; do
         --no-iso) NO_ISO=1; shift ;;
         --kvm) KVM=1; shift ;;
         -h|--help) usage ;;
-        all|kernel|userland|apps|graphics|libnv0|iso|grub-iso|run|run-debug|clean)
+        all|kernel|userland|apps|graphics|libnv0|iso|grub-iso|run|run-grub|run-debug|clean)
             TARGET="$1"; shift ;;
         *) err "unknown option: $1" ;;
     esac
@@ -169,12 +170,13 @@ build_grub_iso() {
 
 run_qemu() {
     local debug="$1"
-    if [[ ! -f "$BUILD/nv0ken.iso" ]]; then
-        err "build/nv0ken.iso not found — run build.sh first"
+    local iso="${2:-$BUILD/nv0ken.iso}"
+    if [[ ! -f "$iso" ]]; then
+        err "$iso not found - run build.sh first"
     fi
 
     local qemu_flags=(
-        -cdrom "$BUILD/nv0ken.iso"
+        -cdrom "$iso"
         -m 256M
         -cpu qemu64
         -serial stdio
@@ -250,7 +252,9 @@ case "$TARGET" in
         ;;
 
     grub-iso)
-        check_tools grub-mkrescue xorriso
+        check_tools gcc nasm ld grub-mkrescue xorriso
+        build_kernel
+        build_initrd
         build_grub_iso
         ;;
 
@@ -267,6 +271,21 @@ case "$TARGET" in
         build_initrd
         build_iso
         run_qemu ""
+        ;;
+
+    run-grub)
+        check_tools gcc nasm ar ld qemu-system-x86_64 grub-mkrescue xorriso
+        build_kernel
+        build_libc
+        build_libnv0
+        build_init
+        build_shell
+        build_utils
+        build_graphics
+        build_apps
+        build_initrd
+        build_grub_iso
+        run_qemu "" "$BUILD/nv0ken-grub.iso"
         ;;
 
     run-debug)

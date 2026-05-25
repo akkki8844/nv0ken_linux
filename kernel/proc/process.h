@@ -35,6 +35,7 @@ process_t *process_create(const char *name, uint64_t parent_pid);
 void process_destroy(process_t *process);
 process_t *process_find(uint64_t pid);
 process_t *process_current(void);
+process_t *process_first(void);
 void process_set_current(process_t *process);
 void process_exit(process_t *process, int code);
 bool process_is_alive(const process_t *process);

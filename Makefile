@@ -18,7 +18,7 @@ SUBMAKES := \
     apps/calculator \
     apps/browser
 
-.PHONY: all clean $(SUBMAKES) iso initrd
+.PHONY: all clean $(SUBMAKES) iso grub-iso initrd run run-grub run-debug
 
 all: $(SUBMAKES) initrd iso
 
@@ -67,8 +67,14 @@ initrd:
 iso: kernel
 	bash tools/mkiso.sh
 
+grub-iso: kernel initrd
+	bash tools/mkiso_grub.sh
+
 run: all
 	bash tools/run_qemu.sh
+
+run-grub: grub-iso
+	bash tools/run_qemu.sh build/nv0ken-grub.iso
 
 run-debug: all
 	bash tools/run_qemu_debug.sh

@@ -17,13 +17,9 @@ int wait_for_pid(uint64_t pid, wait_result_t *result)
 
 int wait_any_child(uint64_t parent_pid, wait_result_t *result)
 {
-    for (uint64_t pid = 1; pid < UINT64_MAX; ++pid) {
-        process_t *process = process_find(pid);
-        if (!process) {
-            continue;
-        }
+    for (process_t *process = process_first(); process; process = process->next) {
         if (process->parent_pid == parent_pid && process->state == PROCESS_ZOMBIE) {
-            return wait_for_pid(pid, result);
+            return wait_for_pid(process->pid, result);
         }
     }
     return -1;

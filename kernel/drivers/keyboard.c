@@ -32,7 +32,7 @@ static void keyboard_irq(registers_t *regs, void *context)
 
 void keyboard_init(void)
 {
-    while (inb(KBD_STATUS) & 1) {
+    for (unsigned spin = 0; spin < 256 && (inb(KBD_STATUS) & 1); ++spin) {
         (void)inb(KBD_DATA);
     }
     irq_register(1, keyboard_irq, 0);

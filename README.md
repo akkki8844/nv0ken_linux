@@ -8,7 +8,7 @@ a 64-bit x86_64 operating system built from scratch. boots via the limine bootlo
 
 ```bash
 # install dependencies
-sudo apt install build-essential nasm qemu-system-x86 xorriso git
+sudo apt install build-essential nasm qemu-system-x86 xorriso grub-pc-bin grub-common git
 
 # clone
 git clone https://github.com/akkki8844/nv0ken_linux.git
@@ -72,6 +72,8 @@ that's it. the script fetches the limine bootloader automatically on first run.
 |---|---|
 | `bash build.sh` | build everything + ISO |
 | `bash build.sh run` | build everything + launch QEMU |
+| `bash build.sh grub-iso` | build kernel/initrd + package GRUB ISO |
+| `bash build.sh run-grub` | build GRUB ISO + launch QEMU |
 | `bash build.sh run-debug` | build everything + QEMU with GDB stub on :1234 |
 | `bash build.sh kernel` | kernel only |
 | `bash build.sh userland` | libc + init + shell + utils |
