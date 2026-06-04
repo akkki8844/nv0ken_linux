@@ -106,6 +106,26 @@ int vfs_create(const char *path, vfs_node_type_t type, vfs_node_t **out)
     return parent->ops->create(parent, name, type, out);
 }
 
+int vfs_unlink(const char *path)
+{
+    vfs_node_t *node = vfs_lookup(path);
+    if (!node || !node->parent || node == root_node) {
+        return -1;
+    }
+
+    vfs_node_t **cursor = &node->parent->children;
+    while (*cursor) {
+        if (*cursor == node) {
+            *cursor = node->next;
+            node->parent = 0;
+            node->next = 0;
+            return 0;
+        }
+        cursor = &(*cursor)->next;
+    }
+    return -1;
+}
+
 int vfs_read(vfs_node_t *node, size_t offset, void *buffer, size_t count)
 {
     if (!node || !node->ops || !node->ops->read) {

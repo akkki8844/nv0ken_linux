@@ -16,8 +16,12 @@ typedef struct {
 
 void fd_table_init(void);
 int fd_alloc(vfs_node_t *node, int flags);
+int fd_alloc_at(int fd, vfs_node_t *node, int flags);
 int fd_close(int fd);
 fd_entry_t *fd_get(int fd);
+int fd_dup(int fd);
+int fd_dup2(int oldfd, int newfd);
+int fd_seek(int fd, long long offset, int whence);
 int fd_read(int fd, void *buffer, size_t count);
 int fd_write(int fd, const void *buffer, size_t count);
 

@@ -66,6 +66,16 @@ shm_segment_t *shm_find(const char *name)
     return 0;
 }
 
+shm_segment_t *shm_find_id(uint32_t id)
+{
+    for (size_t index = 0; index < SHM_MAX_SEGMENTS; ++index) {
+        if (segments[index].id == id) {
+            return &segments[index];
+        }
+    }
+    return 0;
+}
+
 void *shm_attach(shm_segment_t *segment)
 {
     if (!segment || !segment->id) {

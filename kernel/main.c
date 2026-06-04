@@ -134,6 +134,11 @@ static void init_kernel_services(void)
 {
     shm_init();
     process_system_init();
+    process_t *kernel_process = process_create("kernel", 0);
+    if (kernel_process) {
+        kernel_process->state = PROCESS_RUNNING;
+        process_set_current(kernel_process);
+    }
     scheduler_init();
     syscall_table_init();
     netdev_init();

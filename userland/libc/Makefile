@@ -19,8 +19,11 @@ SRC_C = \
     src/stdlib.c \
     src/stdio.c \
     src/dirent.c \
+    src/fcntl.c \
+    src/stat.c \
     src/unistd.c \
     src/signal.c \
+    src/utsname.c \
     src/assert.c
 
 SRC_ASM = \

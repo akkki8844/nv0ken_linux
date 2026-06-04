@@ -17,6 +17,7 @@ typedef struct {
 void shm_init(void);
 shm_segment_t *shm_create(const char *name, size_t size);
 shm_segment_t *shm_find(const char *name);
+shm_segment_t *shm_find_id(uint32_t id);
 void *shm_attach(shm_segment_t *segment);
 void shm_detach(shm_segment_t *segment);
 
