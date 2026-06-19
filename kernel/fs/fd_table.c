@@ -16,7 +16,7 @@ int fd_alloc(vfs_node_t *node, int flags)
         return -1;
     }
 
-    for (int fd = 0; fd < FD_TABLE_MAX; ++fd) {
+    for (int fd = 3; fd < FD_TABLE_MAX; ++fd) {
         if (!table[fd].node) {
             table[fd].node = node;
             table[fd].offset = 0;
@@ -66,7 +66,7 @@ int fd_dup(int fd)
         return -1;
     }
 
-    for (int newfd = 0; newfd < FD_TABLE_MAX; ++newfd) {
+    for (int newfd = 3; newfd < FD_TABLE_MAX; ++newfd) {
         if (!table[newfd].node) {
             table[newfd] = *entry;
             ++entry->refs;

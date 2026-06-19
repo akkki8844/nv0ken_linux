@@ -135,6 +135,14 @@ x/20i $rip
 
 serial output (all `kprintf` calls) appears in the terminal where QEMU was launched.
 
+### built-in recovery monitor
+
+After kernel initialization, nv0ken presents an interactive monitor on the PS/2
+keyboard and framebuffer console. Type `help` to list commands. The monitor can
+inspect memory and uptime, list/read initrd files, replay the kernel log, clear
+the display, reboot, and halt. This remains available as a recovery environment
+while the full ring-3 desktop/userland path continues to mature.
+
 ---
 
 ## roadmap

@@ -6,9 +6,11 @@
 
 #include "drivers/framebuffer.h"
 #include "drivers/serial.h"
+#include "klog.h"
 
 void kputchar(char ch)
 {
+    klog_putc(ch);
     serial_write_char(ch);
     framebuffer_putc(ch);
 }
@@ -96,7 +98,21 @@ int kvprintf(const char *fmt, va_list args)
         }
 
         ++fmt;
-        switch (*fmt++) {
+        enum { LENGTH_DEFAULT, LENGTH_LONG, LENGTH_LONG_LONG, LENGTH_SIZE } length = LENGTH_DEFAULT;
+        if (*fmt == 'z') {
+            length = LENGTH_SIZE;
+            ++fmt;
+        } else if (*fmt == 'l') {
+            length = LENGTH_LONG;
+            ++fmt;
+            if (*fmt == 'l') {
+                length = LENGTH_LONG_LONG;
+                ++fmt;
+            }
+        }
+
+        char specifier = *fmt++;
+        switch (specifier) {
         case '%':
             kputchar('%');
             ++count;
@@ -110,16 +126,40 @@ int kvprintf(const char *fmt, va_list args)
             break;
         case 'd':
         case 'i':
-            count += emit_signed(va_arg(args, int));
+            if (length == LENGTH_LONG_LONG) {
+                count += emit_signed(va_arg(args, long long));
+            } else if (length == LENGTH_LONG || length == LENGTH_SIZE) {
+                count += emit_signed(va_arg(args, long));
+            } else {
+                count += emit_signed(va_arg(args, int));
+            }
             break;
         case 'u':
-            count += emit_unsigned(va_arg(args, unsigned int), 10, false);
+            if (length == LENGTH_LONG_LONG) {
+                count += emit_unsigned(va_arg(args, unsigned long long), 10, false);
+            } else if (length == LENGTH_LONG || length == LENGTH_SIZE) {
+                count += emit_unsigned(va_arg(args, unsigned long), 10, false);
+            } else {
+                count += emit_unsigned(va_arg(args, unsigned int), 10, false);
+            }
             break;
         case 'x':
-            count += emit_unsigned(va_arg(args, unsigned int), 16, false);
+            if (length == LENGTH_LONG_LONG) {
+                count += emit_unsigned(va_arg(args, unsigned long long), 16, false);
+            } else if (length == LENGTH_LONG || length == LENGTH_SIZE) {
+                count += emit_unsigned(va_arg(args, unsigned long), 16, false);
+            } else {
+                count += emit_unsigned(va_arg(args, unsigned int), 16, false);
+            }
             break;
         case 'X':
-            count += emit_unsigned(va_arg(args, unsigned int), 16, true);
+            if (length == LENGTH_LONG_LONG) {
+                count += emit_unsigned(va_arg(args, unsigned long long), 16, true);
+            } else if (length == LENGTH_LONG || length == LENGTH_SIZE) {
+                count += emit_unsigned(va_arg(args, unsigned long), 16, true);
+            } else {
+                count += emit_unsigned(va_arg(args, unsigned int), 16, true);
+            }
             break;
         case 'p':
             count += emit_string("0x");

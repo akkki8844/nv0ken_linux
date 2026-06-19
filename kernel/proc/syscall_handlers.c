@@ -3,11 +3,13 @@
 #include <stddef.h>
 
 #include "../drivers/timer.h"
+#include "../drivers/console.h"
 #include "../fs/fd_table.h"
 #include "../fs/pipe_fs.h"
 #include "../fs/vfs.h"
 #include "../ipc/shm.h"
 #include "../lib/kprintf.h"
+#include "../lib/klog.h"
 #include "../lib/string.h"
 #include "../mm/heap.h"
 #include "../net/socket.h"
@@ -154,7 +156,13 @@ long sys_read(uint64_t fd, uint64_t buffer, uint64_t length,
         return errno_ret(EFAULT);
     }
     if (fd == 0) {
-        return 0;
+        return (long)console_read((void *)(uintptr_t)buffer, (size_t)length, 1);
+    }
+    fd_entry_t *entry = fd_get((int)fd);
+    if (entry && entry->node && strcmp(entry->node->name, "klog") == 0) {
+        size_t read = klog_read(entry->offset, (void *)(uintptr_t)buffer, (size_t)length);
+        entry->offset += read;
+        return (long)read;
     }
     int read = fd_read((int)fd, (void *)(uintptr_t)buffer, (size_t)length);
     return read < 0 ? errno_ret(EBADF) : read;

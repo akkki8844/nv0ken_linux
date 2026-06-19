@@ -48,3 +48,28 @@ int keyboard_shift_down(void)
 {
     return shift_down;
 }
+
+int keyboard_poll_char(char *out)
+{
+    if (!out || (inb(KBD_STATUS) & 1) == 0) {
+        return 0;
+    }
+
+    uint8_t scancode = inb(KBD_DATA);
+    int pressed = (scancode & 0x80) == 0;
+    uint8_t code = scancode & 0x7f;
+    if (code == 0x2a || code == 0x36) {
+        shift_down = pressed;
+        return 0;
+    }
+    if (!pressed) {
+        return 0;
+    }
+
+    char ch = shift_down ? keyboard_us_shift_map[code] : keyboard_us_map[code];
+    if (!ch) {
+        return 0;
+    }
+    *out = ch;
+    return 1;
+}

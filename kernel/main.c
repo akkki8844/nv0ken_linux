@@ -6,6 +6,7 @@
 #include "arch/x86_64/irq.h"
 #include "arch/x86_64/paging.h"
 #include "drivers/acpi.h"
+#include "drivers/console.h"
 #include "drivers/framebuffer.h"
 #include "drivers/keyboard.h"
 #include "drivers/mouse.h"
@@ -18,10 +19,12 @@
 #include "fs/vfs.h"
 #include "ipc/shm.h"
 #include "lib/kprintf.h"
+#include "lib/klog.h"
 #include "mm/addr_space.h"
 #include "mm/heap.h"
 #include "mm/mmap.h"
 #include "mm/pmm.h"
+#include "monitor.h"
 #include "net/arp.h"
 #include "net/netdev.h"
 #include "net/socket.h"
@@ -78,6 +81,7 @@ LIMINE_REQUEST_TERMINATE;
 
 static unsigned char bootstrap_heap[1024 * 1024] __attribute__((aligned(16)));
 static addr_space_t kernel_address_space;
+static unsigned pci_device_count;
 
 static void halt_forever(void)
 {
@@ -119,6 +123,7 @@ static void init_filesystems(void)
         vfs_create("/dev", VFS_NODE_DIR, 0);
         vfs_create("/tmp", VFS_NODE_DIR, 0);
         vfs_create("/proc", VFS_NODE_DIR, 0);
+        vfs_create("/dev/klog", VFS_NODE_FILE, 0);
 
         if (module_request.response && module_request.response->module_count > 0) {
             struct limine_file *module = module_request.response->modules[0];
@@ -146,20 +151,40 @@ static void init_kernel_services(void)
     socket_init();
 }
 
+static void pci_boot_probe(const pci_device_t *device, void *context)
+{
+    (void)context;
+    if (!device) {
+        return;
+    }
+    ++pci_device_count;
+    kprintf("[pci] %u:%u.%u vendor=%x device=%x class=%x:%x\n",
+            device->bus,
+            device->slot,
+            device->function,
+            device->vendor_id,
+            device->device_id,
+            device->class_code,
+            device->subclass);
+}
+
 static void init_hardware(void)
 {
     timer_init(100);
+    console_init();
     keyboard_init();
     mouse_init();
     if (rsdp_request.response) {
         acpi_init(rsdp_request.response->address);
     }
-    pci_scan(0, 0);
+    pci_device_count = 0;
+    pci_scan(pci_boot_probe, 0);
     cpu_sti();
 }
 
 void kmain(void)
 {
+    klog_clear();
     cpu_init();
     serial_init(COM1);
     gdt_init();
@@ -178,16 +203,27 @@ void kmain(void)
     init_kernel_services();
     init_hardware();
 
-    kprintf("nv0ken_linux booted\n");
-    kprintf("limine framebuffer: %ux%u\n",
+    kprintf("\n+--------------------------------------------------+\n");
+    kprintf("|                nv0ken_linux 0.1                 |\n");
+    kprintf("|        x86_64 educational operating system      |\n");
+    kprintf("+--------------------------------------------------+\n");
+    kprintf("[boot] framebuffer %ux%u\n",
             framebuffer_width(),
             framebuffer_height());
-    kprintf("x86_64 descriptors and irq layer online\n");
-    kprintf("memory: regions=%u free_frames=%u heap_free=%u\n",
-            (unsigned)mmap_region_count(),
-            (unsigned)pmm_free_count(),
-            (unsigned)heap_bytes_free());
-    kprintf("vfs/tmpfs, ipc, scheduler, syscalls, and net core online\n");
+    if (kernel_address_request.response) {
+        kprintf("[boot] kernel phys=%llx virt=%llx\n",
+                (unsigned long long)kernel_address_request.response->physical_base,
+                (unsigned long long)kernel_address_request.response->virtual_base);
+    }
+    kprintf("[arch] descriptors, interrupts, syscall/sysret online\n");
+    kprintf("[mem ] regions=%zu free_frames=%zu heap_free=%zu bytes\n",
+            mmap_region_count(), pmm_free_count(), heap_bytes_free());
+    kprintf("[fs  ] tmpfs root and initrd mounted; /dev/klog ready\n");
+    kprintf("[hw  ] timer, PS/2 input, ACPI, PCI (%u devices) online\n",
+            pci_device_count);
+    kprintf("[net ] ARP, IPv4, ICMP, UDP, TCP and sockets initialized\n");
+    kprintf("[ ok ] kernel initialization complete\n\n");
 
+    monitor_run(pci_device_count);
     halt_forever();
 }

@@ -14,6 +14,22 @@ for the GRUB boot path:
 bash build.sh run-grub 2>&1 | tee grub-kernel.log
 ```
 
+## recovery monitor
+
+The kernel enters the `nv0>` monitor after boot. Useful commands include:
+
+```text
+status      subsystem and PCI summary
+mem         PMM and heap counters
+uptime      PIT ticks and elapsed milliseconds
+ls          list the initrd-backed root
+cat PATH    read a VFS file
+dmesg       replay the 16 KiB in-memory kernel log
+clear       clear the framebuffer
+reboot      reset through the PS/2 controller
+halt        stop the CPU
+```
+
 ## GDB + QEMU
 
 ### launch QEMU in debug mode
