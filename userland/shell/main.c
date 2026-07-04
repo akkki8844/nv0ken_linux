@@ -14,7 +14,7 @@
 #define PROMPT_MAX  256
 #define INPUT_MAX   4096
 
-static int g_last_status = 0;
+int g_last_status = 0;
 static int g_interactive  = 0;
 
 /* -----------------------------------------------------------------------
