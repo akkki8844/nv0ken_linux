@@ -1,6 +1,7 @@
 #ifndef NV0KEN_MM_COW_H
 #define NV0KEN_MM_COW_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 #define COW_FLAG  (1ull << 9)
