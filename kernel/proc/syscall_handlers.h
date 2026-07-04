@@ -57,6 +57,10 @@ long sys_ftruncate(uint64_t fd, uint64_t length, uint64_t unused3,
                    uint64_t unused4, uint64_t unused5, uint64_t unused6);
 long sys_nanosleep(uint64_t req, uint64_t rem, uint64_t unused3,
                    uint64_t unused4, uint64_t unused5, uint64_t unused6);
+long sys_time(uint64_t result, uint64_t unused2, uint64_t unused3,
+              uint64_t unused4, uint64_t unused5, uint64_t unused6);
+long sys_clock_gettime(uint64_t clock_id, uint64_t result, uint64_t unused3,
+                       uint64_t unused4, uint64_t unused5, uint64_t unused6);
 long sys_kill(uint64_t pid, uint64_t signal, uint64_t unused3,
               uint64_t unused4, uint64_t unused5, uint64_t unused6);
 long sys_socket(uint64_t domain, uint64_t type, uint64_t protocol,

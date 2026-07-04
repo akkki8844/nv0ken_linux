@@ -23,6 +23,7 @@ SRC_C = \
     src/stat.c \
     src/unistd.c \
     src/signal.c \
+    src/time.c \
     src/wait.c \
     src/utsname.c \
     src/assert.c

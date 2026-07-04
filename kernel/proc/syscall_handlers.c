@@ -3,6 +3,7 @@
 #include <stddef.h>
 
 #include "../drivers/timer.h"
+#include "../drivers/rtc.h"
 #include "../drivers/console.h"
 #include "../fs/fd_table.h"
 #include "../fs/pipe_fs.h"
@@ -580,6 +581,43 @@ long sys_nanosleep(uint64_t req_arg, uint64_t rem, uint64_t unused3,
     }
     uint64_t ms = (uint64_t)req->tv_sec * 1000ull + (uint64_t)req->tv_nsec / 1000000ull;
     timer_sleep_ms(ms);
+    return 0;
+}
+
+long sys_time(uint64_t result_arg, uint64_t unused2, uint64_t unused3,
+              uint64_t unused4, uint64_t unused5, uint64_t unused6)
+{
+    (void)unused2;
+    (void)unused3;
+    (void)unused4;
+    (void)unused5;
+    (void)unused6;
+    int64_t seconds = (int64_t)rtc_unix_time();
+    if (result_arg) {
+        *(int64_t *)(uintptr_t)result_arg = seconds;
+    }
+    return seconds;
+}
+
+long sys_clock_gettime(uint64_t clock_id, uint64_t result_arg, uint64_t unused3,
+                       uint64_t unused4, uint64_t unused5, uint64_t unused6)
+{
+    (void)unused3;
+    (void)unused4;
+    (void)unused5;
+    (void)unused6;
+    user_timespec_t *result = (user_timespec_t *)(uintptr_t)result_arg;
+    if (!result || clock_id > 1) {
+        return errno_ret(EINVAL);
+    }
+    uint64_t milliseconds;
+    if (clock_id == 0) {
+        milliseconds = rtc_unix_time() * 1000ull;
+    } else {
+        milliseconds = timer_uptime_ms();
+    }
+    result->tv_sec = (int64_t)(milliseconds / 1000ull);
+    result->tv_nsec = (int64_t)((milliseconds % 1000ull) * 1000000ull);
     return 0;
 }
 

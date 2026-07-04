@@ -36,6 +36,8 @@ enum {
     SYS_TRUNCATE = 40,
     SYS_FTRUNCATE = 41,
     SYS_NANOSLEEP = 42,
+    SYS_TIME = 43,
+    SYS_CLOCK_GETTIME = 44,
     SYS_KILL = 45,
     SYS_SOCKET = 49,
     SYS_CONNECT = 51,

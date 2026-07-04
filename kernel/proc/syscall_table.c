@@ -38,6 +38,8 @@ void syscall_table_init(void)
     REGISTER(SYS_TRUNCATE, sys_truncate);
     REGISTER(SYS_FTRUNCATE, sys_ftruncate);
     REGISTER(SYS_NANOSLEEP, sys_nanosleep);
+    REGISTER(SYS_TIME, sys_time);
+    REGISTER(SYS_CLOCK_GETTIME, sys_clock_gettime);
     REGISTER(SYS_KILL, sys_kill);
     REGISTER(SYS_SOCKET, sys_socket);
     REGISTER(SYS_CONNECT, sys_connect);

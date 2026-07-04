@@ -1,7 +1,6 @@
 name: Build nv0ken_linux
 
 on:
-  push:
   pull_request:
   workflow_dispatch:
 
