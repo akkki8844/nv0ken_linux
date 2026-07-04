@@ -2,6 +2,7 @@
 #define UNISTD_H
 
 #include <stddef.h>
+#include <stdint.h>
 #include <sys/types.h>
 
 #define STDIN_FILENO  0

@@ -242,7 +242,8 @@ int vsnprintf(char *buf, size_t size, const char *fmt, va_list ap) {
                 unsigned long long uv;
                 if (v < 0) { sign = '-'; uv = (unsigned long long)(-v); }
                 else { sign = plus ? '+' : space ? ' ' : 0; uv = (unsigned long long)v; }
-                fmt_num(tmp, &(tlen = 0), uv, 10, 0, width, zero_pad, left, sign);
+                tlen = 0;
+                fmt_num(tmp, &tlen, uv, 10, 0, width, zero_pad, left, sign);
                 for (int i = 0; i < tlen; i++) PUT(tmp[i]);
                 break;
             }
@@ -250,7 +251,8 @@ int vsnprintf(char *buf, size_t size, const char *fmt, va_list ap) {
                 unsigned long long v = lng == 2 ? va_arg(ap, unsigned long long) :
                                        lng == 1 ? va_arg(ap, unsigned long)      :
                                                   va_arg(ap, unsigned int);
-                fmt_num(tmp, &(tlen = 0), v, 10, 0, width, zero_pad, left, 0);
+                tlen = 0;
+                fmt_num(tmp, &tlen, v, 10, 0, width, zero_pad, left, 0);
                 for (int i = 0; i < tlen; i++) PUT(tmp[i]);
                 break;
             }
@@ -259,21 +261,24 @@ int vsnprintf(char *buf, size_t size, const char *fmt, va_list ap) {
                                        lng == 1 ? va_arg(ap, unsigned long)      :
                                                   va_arg(ap, unsigned int);
                 if (alt && v) { PUT('0'); PUT(spec == 'X' ? 'X' : 'x'); }
-                fmt_num(tmp, &(tlen = 0), v, 16, spec=='X', width, zero_pad, left, 0);
+                tlen = 0;
+                fmt_num(tmp, &tlen, v, 16, spec=='X', width, zero_pad, left, 0);
                 for (int i = 0; i < tlen; i++) PUT(tmp[i]);
                 break;
             }
             case 'o': {
                 unsigned long long v = lng == 1 ? va_arg(ap, unsigned long) :
                                                   va_arg(ap, unsigned int);
-                fmt_num(tmp, &(tlen = 0), v, 8, 0, width, zero_pad, left, 0);
+                tlen = 0;
+                fmt_num(tmp, &tlen, v, 8, 0, width, zero_pad, left, 0);
                 for (int i = 0; i < tlen; i++) PUT(tmp[i]);
                 break;
             }
             case 'p': {
                 unsigned long long v = (unsigned long long)(uintptr_t)va_arg(ap, void *);
                 PUT('0'); PUT('x');
-                fmt_num(tmp, &(tlen = 0), v, 16, 0, 0, 1, 0, 0);
+                tlen = 0;
+                fmt_num(tmp, &tlen, v, 16, 0, 0, 1, 0, 0);
                 for (int i = 0; i < tlen; i++) PUT(tmp[i]);
                 break;
             }
