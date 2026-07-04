@@ -12,9 +12,9 @@ SRC_C := $(shell find . -name '*.c')
 SRC_ASM := $(shell find . -name '*.asm')
 BOOT_ASM := ../boot/multiboot2_header.asm
 
-OBJ_C := $(patsubst ./%.c,$(OUT)/%.o,$(SRC_C))
-OBJ_ASM := $(patsubst ./%.asm,$(OUT)/%.o,$(SRC_ASM))
-OBJ_BOOT_ASM := $(OUT)/boot/multiboot2_header.o
+OBJ_C := $(patsubst ./%.c,$(OUT)/%.c.o,$(SRC_C))
+OBJ_ASM := $(patsubst ./%.asm,$(OUT)/%.asm.o,$(SRC_ASM))
+OBJ_BOOT_ASM := $(OUT)/boot/multiboot2_header.asm.o
 OBJS := $(OBJ_BOOT_ASM) $(OBJ_ASM) $(OBJ_C)
 
 TARGET := $(BUILD)/kernel.elf
@@ -26,11 +26,11 @@ all: $(TARGET)
 $(TARGET): $(OBJS) kernel.ld
 	$(LD) $(LDFLAGS) $(OBJS) -o $@
 
-$(OUT)/%.o: %.c
+$(OUT)/%.c.o: %.c
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OUT)/%.o: %.asm
+$(OUT)/%.asm.o: %.asm
 	mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) $< -o $@
 
