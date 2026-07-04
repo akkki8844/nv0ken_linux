@@ -26,7 +26,8 @@ jobs:
         run: |
           set -o pipefail
           if ! bash build.sh kernel 2>&1 | tee build-kernel.log; then
-            tail -n 40 build-kernel.log | while IFS= read -r line; do
+            grep -Ei 'error|undefined|relocation|multiple definition|cannot find|failed|make.*\*\*\*' \
+              build-kernel.log | tail -n 30 | while IFS= read -r line; do
                 line="${line//'%'/'%25'}"
                 line="${line//$'\r'/'%0D'}"
                 line="${line//$'\n'/'%0A'}"

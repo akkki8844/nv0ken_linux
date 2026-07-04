@@ -118,7 +118,7 @@ multiboot2_magic:
 multiboot2_info:
     dq 0
 
-section .boot.bss
+section .boot.bss nobits
 align 4096
 boot_pml4:
     resq 512
