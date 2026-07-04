@@ -33,6 +33,7 @@ struct sigaction {
 
 sighandler_t signal(int signal_number, sighandler_t handler);
 int raise(int signal_number);
+int kill(int process_id, int signal_number);
 int sigaction(int signal_number, const struct sigaction *action,
               struct sigaction *previous);
 int sigemptyset(sigset_t *set);

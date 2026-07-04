@@ -20,6 +20,15 @@ int raise(int sig) {
     return sys_kill(sys_getpid(), sig);
 }
 
+int kill(int process_id, int sig) {
+    long result = sys_kill(process_id, sig);
+    if (result < 0) {
+        errno = (int)-result;
+        return -1;
+    }
+    return 0;
+}
+
 int sigaction(int sig, const struct sigaction *action, struct sigaction *old) {
     long result = sys_sigaction(sig, action, old);
     if (result < 0) {
