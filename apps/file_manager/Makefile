@@ -10,6 +10,7 @@ ROOT   = ../../..
 LIBNV0 = $(ROOT)/libnv0
 LIBC   = $(ROOT)/userland/libc
 BUILD  = $(ROOT)/build/apps/file_manager
+CRT0   = $(ROOT)/build/userland/libc/crt0.o
 
 INCLUDES = \
     -I. \
@@ -40,8 +41,8 @@ all: $(BUILD) $(TARGET)
 $(BUILD):
 	mkdir -p $(BUILD)
 
-$(TARGET): $(OBJS)
-	$(CC) $(OBJS) $(LDFLAGS) -o $@
+$(TARGET): $(OBJS) $(CRT0)
+	$(CC) $(CRT0) $(OBJS) $(LDFLAGS) -o $@
 
 $(BUILD)/%.o: %.c
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@

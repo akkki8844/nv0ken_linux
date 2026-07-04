@@ -8,6 +8,7 @@ CFLAGS = -std=c11 -Wall -Wextra \
 ROOT   = ../..
 LIBC   = $(ROOT)/userland/libc
 BUILD  = $(ROOT)/build/userland/init
+CRT0   = $(ROOT)/build/userland/libc/crt0.o
 
 INCLUDES = -I$(LIBC)/include
 
@@ -29,8 +30,8 @@ all: $(BUILD) $(TARGET)
 $(BUILD):
 	mkdir -p $(BUILD)
 
-$(TARGET): $(OBJS)
-	$(CC) $(OBJS) $(LDFLAGS) -o $@
+$(TARGET): $(OBJS) $(CRT0)
+	$(CC) $(CRT0) $(OBJS) $(LDFLAGS) -o $@
 
 $(BUILD)/%.o: %.c
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
