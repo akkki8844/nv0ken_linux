@@ -14,7 +14,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install toolchain
         run: |
@@ -22,7 +22,18 @@ jobs:
           sudo apt-get install --yes build-essential nasm xorriso grub-pc-bin grub-common mtools
 
       - name: Build kernel
-        run: bash build.sh kernel
+        shell: bash
+        run: |
+          set -o pipefail
+          if ! bash build.sh kernel 2>&1 | tee build-kernel.log; then
+            {
+              echo '### Kernel build failure'
+              echo '```text'
+              tail -n 120 build-kernel.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
 
       - name: Verify Multiboot2 image
         run: grub-file --is-x86-multiboot2 build/kernel.elf
