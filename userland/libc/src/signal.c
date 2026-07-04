@@ -2,9 +2,10 @@
 #include <errno.h>
 #include <string.h>
 
-typedef void (*sighandler_t)(int);
-
-static sighandler_t handlers[32] = {0};
+extern long sys_sigaction(int signal_number, const struct sigaction *action,
+                          struct sigaction *previous);
+extern long sys_kill(int process_id, int signal_number);
+extern long sys_getpid(void);
 
 sighandler_t signal(int sig, sighandler_t handler) {
     if (sig < 0 || sig >= 32) { errno = EINVAL; return SIG_ERR; }
@@ -17,4 +18,42 @@ sighandler_t signal(int sig, sighandler_t handler) {
 
 int raise(int sig) {
     return sys_kill(sys_getpid(), sig);
+}
+
+int sigaction(int sig, const struct sigaction *action, struct sigaction *old) {
+    long result = sys_sigaction(sig, action, old);
+    if (result < 0) {
+        errno = (int)-result;
+        return -1;
+    }
+    return 0;
+}
+
+int sigemptyset(sigset_t *set) {
+    if (!set) { errno = EINVAL; return -1; }
+    *set = 0;
+    return 0;
+}
+
+int sigfillset(sigset_t *set) {
+    if (!set) { errno = EINVAL; return -1; }
+    *set = ~(sigset_t)0;
+    return 0;
+}
+
+int sigaddset(sigset_t *set, int sig) {
+    if (!set || sig <= 0 || sig > 64) { errno = EINVAL; return -1; }
+    *set |= (sigset_t)1 << (sig - 1);
+    return 0;
+}
+
+int sigdelset(sigset_t *set, int sig) {
+    if (!set || sig <= 0 || sig > 64) { errno = EINVAL; return -1; }
+    *set &= ~((sigset_t)1 << (sig - 1));
+    return 0;
+}
+
+int sigismember(const sigset_t *set, int sig) {
+    if (!set || sig <= 0 || sig > 64) { errno = EINVAL; return -1; }
+    return (*set & ((sigset_t)1 << (sig - 1))) != 0;
 }

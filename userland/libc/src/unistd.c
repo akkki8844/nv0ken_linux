@@ -1,7 +1,12 @@
 #include <unistd.h>
 #include <errno.h>
 #include <stdarg.h>
+#include <stat.h>
 #include <string.h>
+#include <time.h>
+
+extern long sys_nanosleep(const struct timespec *request,
+                          struct timespec *remaining);
 
 char **environ = 0;
 
