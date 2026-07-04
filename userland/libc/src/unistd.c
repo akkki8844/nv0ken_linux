@@ -145,6 +145,26 @@ pid_t getppid(void) {
     return (pid_t)sys_getppid();
 }
 
+pid_t getpgrp(void) {
+    return getpid();
+}
+
+int setpgid(pid_t process_id, pid_t process_group_id) {
+    if (process_id < 0 || process_group_id < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
+}
+
+int tcsetpgrp(int fd, pid_t process_group_id) {
+    if (fd < 0 || process_group_id <= 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
+}
+
 uid_t getuid(void) {
     return (uid_t)sys_getuid();
 }

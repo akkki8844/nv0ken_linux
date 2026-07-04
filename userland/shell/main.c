@@ -255,7 +255,7 @@ static int exec_node(ASTNode *node) {
  * Execute a full parsed command string
  * --------------------------------------------------------------------- */
 
-static int execute(const char *input) {
+int execute(const char *input) {
     if (!input || !input[0]) return 0;
 
     char *expanded = expand_vars(input);
