@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #define WINDOW_W        900
 #define WINDOW_H        600
@@ -333,7 +334,7 @@ static void action_new_file(FileManager *fm) {
     path_join(dir_view_current_path(fm->view), name, new_path, sizeof(new_path));
     int fd = nv_open(new_path, NV_O_CREAT | NV_O_WRONLY, 0644);
     if (fd >= 0) {
-        nv_close(fd);
+        close(fd);
         dir_view_refresh(fm->view);
         dir_view_select_by_name(fm->view, name);
         update_status_for_dir(fm);

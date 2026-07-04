@@ -52,16 +52,18 @@ typedef struct {
     int x;
     int y;
     uint32_t button;
-    uint32_t modifiers;
+    union { uint32_t modifiers; uint32_t mod; };
 } NvMouseEvent;
 
 typedef struct {
     uint32_t key;
     uint32_t codepoint;
-    uint32_t modifiers;
+    union { uint32_t modifiers; uint32_t mod; };
 } NvKeyEvent;
 
 typedef struct {
+    int x;
+    int y;
     int delta_x;
     int delta_y;
 } NvScrollEvent;

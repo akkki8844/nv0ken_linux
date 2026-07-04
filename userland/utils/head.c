@@ -19,7 +19,7 @@ static int do_head(const char *path) {
 int main(int argc, char **argv) {
     int i = 1;
     if (i < argc && argv[i][0]=='-' && argv[i][1]=='n') {
-        nlines = atoi(argv[i]+2[0] ? argv[i]+2 : argv[++i]);
+        nlines = atoi(argv[i][2] ? argv[i] + 2 : argv[++i]);
         i++;
     } else if (i < argc && argv[i][0]=='-' && argv[i][1]>='1' && argv[i][1]<='9') {
         nlines = atoi(argv[i]+1); i++;

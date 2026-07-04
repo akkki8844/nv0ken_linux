@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <stdarg.h>
+#include "syscall.h"
 
 struct FILE {
     int   fd;
@@ -128,6 +129,12 @@ int fgetc(FILE *f) {
     ssize_t n = read(f->fd, &c, 1);
     if (n <= 0) { if (n == 0) f->eof = 1; else f->error = 1; return EOF; }
     return (int)c;
+}
+
+int ungetc(int c, FILE *f) {
+    if (!f || c == EOF || lseek(f->fd, -1, SEEK_CUR) < 0) return EOF;
+    f->eof = 0;
+    return (unsigned char)c;
 }
 
 int fputc(int c, FILE *f) {

@@ -8,6 +8,10 @@
 #include <string.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <time.h>
+#include "../../libnv0/include/nv0/app.h"
+#include "../../libnv0/include/nv0/dialog.h"
+#include "../../libnv0/include/nv0/input.h"
 
 #define DOUBLE_CLICK_MS     400
 #define SELECTION_COLOR     0x3078D7FF
@@ -73,7 +77,7 @@ static int icon_hit(DesktopIcon *ic, int x, int y) {
 static int get_tick_ms(void) {
     static long long epoch = 0;
     long long t;
-    sys_time(&t);
+    time(&t);
     if (!epoch) epoch = t;
     return (int)((t - epoch) * 1000);
 }

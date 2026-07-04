@@ -2,10 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
 
 int main(int argc, char **argv) {
-    long long t;
-    sys_time(&t);
+    long long t = (long long)time(NULL);
 
     long long s = t % 60; t /= 60;
     long long m = t % 60; t /= 60;

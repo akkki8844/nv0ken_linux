@@ -36,6 +36,7 @@ int    ferror(FILE *f);
 int    fileno(FILE *f);
 
 int    fgetc(FILE *f);
+int    ungetc(int c, FILE *f);
 int    fputc(int c, FILE *f);
 char  *fgets(char *buf, int n, FILE *f);
 int    fputs(const char *s, FILE *f);

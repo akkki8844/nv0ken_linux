@@ -4,6 +4,7 @@
 #include "../font/font_render.h"
 #include <stdlib.h>
 #include <string.h>
+#include "../../libnv0/include/nv0/ipc.h"
 
 #define CELL_W  7
 #define CELL_H  14
@@ -275,7 +276,7 @@ void textbox_on_event(Widget *w, const WidgetEvent *ev, void *ud) {
                 break;
             }
             if (ctrl && key == 'v') {
-                char *clip = nv_clipboard_get();
+                char *clip = nv_clipboard_get_alloc();
                 if (clip) {
                     if (tb->has_selection) delete_selection(tb);
                     for (char *p = clip; *p; p++) insert_char(tb, (uint8_t)*p);
@@ -420,4 +421,4 @@ void textbox_on_event(Widget *w, const WidgetEvent *ev, void *ud) {
         default:
             break;
     }
-}   
+}

@@ -1,4 +1,6 @@
 #include "taskbar.h"
+#include "../../libnv0/include/nv0/input.h"
+#include <time.h>
 #include "launcher.h"
 #include "../draw/draw.h"
 #include "../draw/color.h"
@@ -58,7 +60,7 @@ static void *xmalloc(size_t n) {
 
 static void update_clock(Taskbar *t) {
     long long ts;
-    sys_time(&ts);
+    time(&ts);
 
     long long s  = ts % 60; ts /= 60;
     long long m  = ts % 60; ts /= 60;

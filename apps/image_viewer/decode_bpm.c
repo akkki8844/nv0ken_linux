@@ -1,6 +1,7 @@
 #include "decode_bmp.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #define BMP_SIGNATURE       0x4D42
 #define BI_RGB              0

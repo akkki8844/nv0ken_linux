@@ -12,5 +12,6 @@ void nv_ipc_disconnect(void);
 
 int nv_clipboard_set(const char *text);
 int nv_clipboard_get(char *buffer, size_t buffer_size);
+char *nv_clipboard_get_alloc(void);
 
 #endif

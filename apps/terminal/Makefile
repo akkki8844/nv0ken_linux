@@ -3,7 +3,7 @@ CC     = gcc
 CFLAGS = -std=c11 -Wall -Wextra -Wpedantic \
          -ffreestanding -fno-stack-protector \
          -fno-pie -fno-pic -m64 \
-         -O2 -g
+         -O2 -g -DNV0KEN_KERNEL
 
 ROOT   = ../../..
 LIBNV0 = $(ROOT)/libnv0

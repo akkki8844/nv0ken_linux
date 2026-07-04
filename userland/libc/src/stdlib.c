@@ -2,6 +2,8 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include <wait.h>
+#include "syscall.h"
 
 /* -----------------------------------------------------------------------
  * Heap — sbrk-based linked list allocator

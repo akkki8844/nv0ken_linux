@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include "../../libnv0/include/nv0/ipc.h"
 
 /* -----------------------------------------------------------------------
  * Layout constants
@@ -949,7 +950,7 @@ void textarea_on_event(Widget *w, const WidgetEvent *ev, void *ud) {
                 break;
             }
             if (ctrl && key == 'v') {
-                char *clip = nv_clipboard_get();
+                char *clip = nv_clipboard_get_alloc();
                 if (clip) {
                     if (ta->has_selection) {
                         TAPos s = pos_min(ta->cursor, ta->mark);

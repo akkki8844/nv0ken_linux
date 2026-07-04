@@ -2,6 +2,7 @@
 #include "../../../libnv0/include/nv0/dialog.h"
 #include "../../../libnv0/include/nv0/draw.h"
 #include "../../../libnv0/include/nv0/input.h"
+#include "../../../libnv0/include/nv0/ipc.h"
 #include "../../../libnv0/include/nv0/window.h"
 #include "buffer.h"
 #include "editor.h"
@@ -604,7 +605,7 @@ static void on_key_down(NvWindow *win, NvKeyEvent *ev, void *userdata) {
     }
     case 'v':
     case 'V': {
-      char *text = nv_clipboard_get();
+      char *text = nv_clipboard_get_alloc();
       if (text) {
         buffer_paste(b, text, strlen(text));
         free(text);

@@ -221,3 +221,16 @@ int nv_clipboard_get(char *buffer, size_t buffer_size)
     buffer[len] = '\0';
     return (int)len;
 }
+
+char *nv_clipboard_get_alloc(void)
+{
+    char *text = malloc(sizeof(clipboard_cache));
+    if (!text) {
+        return 0;
+    }
+    if (nv_clipboard_get(text, sizeof(clipboard_cache)) < 0) {
+        free(text);
+        return 0;
+    }
+    return text;
+}

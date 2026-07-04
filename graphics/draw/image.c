@@ -28,6 +28,11 @@ static int32_t read_i32_le(const uint8_t *p) {
     return (int32_t)read_u32_le(p);
 }
 
+static uint32_t mask_scale(uint32_t value, uint32_t mask) {
+    if (!mask) return 0;
+    return mask == 0xFF ? value : (value * 255) / mask;
+}
+
 /* -----------------------------------------------------------------------
  * BMP loader — supports 1/4/8/16/24/32bpp, BI_RGB and BI_BITFIELDS,
  *              RLE4, RLE8, CORE/INFO/V4/V5 headers, top-down and
@@ -93,20 +98,6 @@ NvImage *image_load_bmp(const char *path) {
 
     uint8_t *palette = (bpp <= 8) ? data + 14 + hdr_size : NULL;
     int pal_entry_size = (hdr_size == 12) ? 3 : 4;
-
-    auto uint32_t mask_shift(uint32_t mask) {
-        if (!mask) return 0;
-        int s = 0;
-        while (!(mask & 1)) { mask >>= 1; s++; }
-        return s;
-    }
-    auto uint32_t mask_scale(uint32_t val, uint32_t mask) {
-        if (!mask) return 0;
-        uint32_t m = mask;
-        while (!(m & 1)) m >>= 1;
-        if (m == 0xFF) return val;
-        return (val * 255) / m;
-    }
 
     int rshift = 0, gshift = 0, bshift = 0, ashift = 0;
     uint32_t rmask_n = rmask, gmask_n = gmask, bmask_n = bmask, amask_n = amask;

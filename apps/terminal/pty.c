@@ -19,6 +19,10 @@ static void *xmalloc(size_t n) {
 
 #ifdef NV0KEN_KERNEL
 #include "../../../userland/libc/include/unistd.h"
+#include "../../../userland/libc/include/fcntl.h"
+
+extern long sys_pty_open(int pipe_fds[2]);
+extern long sys_pty_setsize(int fd, int columns, int rows);
 
 struct Pty {
     int          master_fd;
@@ -46,16 +50,15 @@ Pty *pty_open(int cols, int rows, PtyDataFn on_data, void *userdata) {
     p->master_fd = fds[0];
     p->slave_fd  = fds[1];
 
-    sys_pty_set_size(p->master_fd, cols, rows);
+    sys_pty_setsize(p->master_fd, cols, rows);
 
-    p->child_pid = sys_fork();
+    p->child_pid = fork();
     if (p->child_pid == 0) {
-        sys_close(p->master_fd);
-        sys_pty_make_controlling(p->slave_fd);
-        sys_dup2(p->slave_fd, 0);
-        sys_dup2(p->slave_fd, 1);
-        sys_dup2(p->slave_fd, 2);
-        sys_close(p->slave_fd);
+        close(p->master_fd);
+        dup2(p->slave_fd, 0);
+        dup2(p->slave_fd, 1);
+        dup2(p->slave_fd, 2);
+        close(p->slave_fd);
         char *argv[] = { "/bin/nv0sh", NULL };
         char *envp[] = {
             "TERM=xterm-256color",
@@ -64,29 +67,31 @@ Pty *pty_open(int cols, int rows, PtyDataFn on_data, void *userdata) {
             "USER=user",
             NULL
         };
-        sys_execve("/bin/nv0sh", argv, envp);
-        sys_exit(1);
+        execve("/bin/nv0sh", argv, envp);
+        _exit(1);
     }
 
-    sys_close(p->slave_fd);
+    close(p->slave_fd);
     p->slave_fd = -1;
+    int flags = fcntl(p->master_fd, F_GETFL, 0);
+    fcntl(p->master_fd, F_SETFL, flags | O_NONBLOCK);
     return p;
 }
 
 void pty_free(Pty *p) {
     if (!p) return;
-    sys_close(p->master_fd);
+    close(p->master_fd);
     free(p);
 }
 
 int pty_write(Pty *p, const char *buf, int len) {
     if (!p || !buf || len <= 0) return -1;
-    return sys_write(p->master_fd, buf, len);
+    return (int)write(p->master_fd, buf, (size_t)len);
 }
 
 int pty_poll(Pty *p) {
     if (!p) return 0;
-    int n = sys_read_nonblock(p->master_fd, p->read_buf, READ_BUF_SIZE - 1);
+    int n = (int)read(p->master_fd, p->read_buf, READ_BUF_SIZE - 1);
     if (n > 0 && p->on_data) {
         p->read_buf[n] = '\0';
         p->on_data(p->read_buf, n, p->userdata);
@@ -98,7 +103,7 @@ int pty_resize(Pty *p, int cols, int rows) {
     if (!p) return -1;
     p->cols = cols;
     p->rows = rows;
-    return sys_pty_set_size(p->master_fd, cols, rows);
+    return (int)sys_pty_setsize(p->master_fd, cols, rows);
 }
 
 int pty_master_fd(Pty *p) {

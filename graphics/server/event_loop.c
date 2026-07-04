@@ -4,6 +4,7 @@
 #include "cursor.h"
 #include <stdlib.h>
 #include <string.h>
+#include "../../libnv0/include/nv0/input.h"
 
 #define MAX_TIMERS 16
 #define PS2_KB_PORT   0x60

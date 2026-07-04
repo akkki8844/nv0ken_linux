@@ -1,4 +1,5 @@
 #include "damage.h"
+#include <stdlib.h>
 #include <string.h>
 
 void damage_init(DamageTracker *dt, int surface_w, int surface_h) {

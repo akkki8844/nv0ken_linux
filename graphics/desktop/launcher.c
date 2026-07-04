@@ -1,4 +1,6 @@
 #include "launcher.h"
+#include "../../libnv0/include/nv0/app.h"
+#include "../../libnv0/include/nv0/input.h"
 #include "../draw/draw.h"
 #include "../draw/color.h"
 #include "../font/font_render.h"

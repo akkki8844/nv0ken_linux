@@ -4,6 +4,7 @@
 #include <stat.h>
 #include <string.h>
 #include <time.h>
+#include "syscall.h"
 
 extern long sys_nanosleep(const struct timespec *request,
                           struct timespec *remaining);

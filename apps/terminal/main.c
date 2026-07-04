@@ -4,6 +4,7 @@
 #include "../../../libnv0/include/nv0/window.h"
 #include "../../../libnv0/include/nv0/input.h"
 #include "../../../libnv0/include/nv0/draw.h"
+#include "../../../libnv0/include/nv0/ipc.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -215,7 +216,7 @@ static void on_key_down(NvWindow *win, NvKeyEvent *ev, void *userdata) {
             return;
         }
         if (ev->key == 'V' || ev->key == 'v') {
-            char *text = nv_clipboard_get();
+            char *text = nv_clipboard_get_alloc();
             if (text) { pty_write(t->pty, text, strlen(text)); free(text); }
             return;
         }

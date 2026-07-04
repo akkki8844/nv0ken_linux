@@ -283,7 +283,7 @@ static void composite_region(Compositor *c, int rx, int ry, int rw, int rh) {
     if (rw <= 0 || rh <= 0) return;
 
     NvRect clear = { rx, ry, rw, rh };
-    draw_fill_rect(c->back, &clear, 0xFF1A1A2EFF);
+    draw_fill_rect(c->back, &clear, 0x1A1A2EFF);
 
     for (int i = 0; i < c->surface_count; i++) {
         CompSurface *s = &c->surfaces[i];
