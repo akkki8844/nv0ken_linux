@@ -46,7 +46,25 @@ jobs:
         run: grub-file --is-x86-multiboot2 build/kernel.elf
 
       - name: Build userspace and desktop
-        run: bash build.sh all --no-iso
+        shell: bash
+        run: |
+          set -o pipefail
+          if ! bash build.sh all --no-iso 2>&1 | tee build-userspace.log; then
+            grep -Ei 'error|undefined|relocation|multiple definition|cannot find|failed|make.*\*\*\*' \
+              build-userspace.log | tail -n 30 | while IFS= read -r line; do
+                line="${line//'%'/'%25'}"
+                line="${line//$'\r'/'%0D'}"
+                line="${line//$'\n'/'%0A'}"
+                echo "::error title=Userspace build::$line"
+              done
+            {
+              echo '### Userspace build failure'
+              echo '```text'
+              tail -n 120 build-userspace.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
 
       - name: Build GRUB ISO
         run: bash build.sh grub-iso
