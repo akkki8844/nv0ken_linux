@@ -20,7 +20,7 @@ int raise(int sig) {
     return sys_kill(sys_getpid(), sig);
 }
 
-int kill(int process_id, int sig) {
+int kill(pid_t process_id, int sig) {
     long result = sys_kill(process_id, sig);
     if (result < 0) {
         errno = (int)-result;

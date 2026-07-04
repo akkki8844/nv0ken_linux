@@ -2,6 +2,7 @@
 #define NV0_SIGNAL_H
 
 #include <stdint.h>
+#include <sys/types.h>
 
 typedef void (*sighandler_t)(int);
 typedef uint64_t sigset_t;
@@ -33,7 +34,7 @@ struct sigaction {
 
 sighandler_t signal(int signal_number, sighandler_t handler);
 int raise(int signal_number);
-int kill(int process_id, int signal_number);
+int kill(pid_t process_id, int signal_number);
 int sigaction(int signal_number, const struct sigaction *action,
               struct sigaction *previous);
 int sigemptyset(sigset_t *set);
