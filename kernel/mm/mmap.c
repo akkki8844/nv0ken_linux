@@ -5,6 +5,24 @@
 static mmap_region_t regions[MMAP_MAX_REGIONS];
 static size_t region_count;
 
+void mmap_reset(void)
+{
+    memset(regions, 0, sizeof(regions));
+    region_count = 0;
+}
+
+bool mmap_add_region(uint64_t base, uint64_t length, mmap_region_type_t type)
+{
+    if (length == 0 || region_count >= MMAP_MAX_REGIONS) {
+        return false;
+    }
+    regions[region_count].base = base;
+    regions[region_count].length = length;
+    regions[region_count].type = type;
+    ++region_count;
+    return true;
+}
+
 mmap_region_type_t mmap_type_from_limine(uint64_t limine_type)
 {
     switch (limine_type) {
@@ -28,8 +46,7 @@ mmap_region_type_t mmap_type_from_limine(uint64_t limine_type)
 
 void mmap_init_from_limine(struct limine_memmap_response *response)
 {
-    memset(regions, 0, sizeof(regions));
-    region_count = 0;
+    mmap_reset();
     if (!response) {
         return;
     }
@@ -39,10 +56,8 @@ void mmap_init_from_limine(struct limine_memmap_response *response)
         if (!entry || entry->length == 0) {
             continue;
         }
-        regions[region_count].base = entry->base;
-        regions[region_count].length = entry->length;
-        regions[region_count].type = mmap_type_from_limine(entry->type);
-        ++region_count;
+        mmap_add_region(entry->base, entry->length,
+                        mmap_type_from_limine(entry->type));
     }
 }
 

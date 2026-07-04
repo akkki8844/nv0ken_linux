@@ -2,6 +2,7 @@
 #define NV0KEN_MM_MMAP_H
 
 #include <limine.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -24,6 +25,8 @@ typedef struct {
 } mmap_region_t;
 
 void mmap_init_from_limine(struct limine_memmap_response *response);
+void mmap_reset(void);
+bool mmap_add_region(uint64_t base, uint64_t length, mmap_region_type_t type);
 size_t mmap_region_count(void);
 const mmap_region_t *mmap_region_at(size_t index);
 uint64_t mmap_total_usable(void);

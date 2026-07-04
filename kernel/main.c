@@ -5,6 +5,7 @@
 #include "arch/x86_64/idt.h"
 #include "arch/x86_64/irq.h"
 #include "arch/x86_64/paging.h"
+#include "boot/multiboot2.h"
 #include "drivers/acpi.h"
 #include "drivers/console.h"
 #include "drivers/framebuffer.h"
@@ -82,6 +83,7 @@ LIMINE_REQUEST_TERMINATE;
 static unsigned char bootstrap_heap[1024 * 1024] __attribute__((aligned(16)));
 static addr_space_t kernel_address_space;
 static unsigned pci_device_count;
+extern char __kernel_virtual_end[];
 
 static void halt_forever(void)
 {
@@ -97,6 +99,13 @@ static void init_memory(void)
     struct limine_memmap_response *memmap = memmap_request.response;
     if (memmap) {
         mmap_init_from_limine(memmap);
+    } else if (multiboot2_available()) {
+        multiboot2_init_memory_map();
+    } else {
+        mmap_reset();
+    }
+
+    if (mmap_region_count() > 0) {
         pmm_init(mmap_highest_addr());
         for (size_t index = 0; index < mmap_region_count(); ++index) {
             const mmap_region_t *region = mmap_region_at(index);
@@ -105,6 +114,17 @@ static void init_memory(void)
             } else {
                 pmm_mark_reserved(region->base, region->length);
             }
+        }
+        uint64_t kernel_start = 0x100000;
+        uint64_t kernel_end =
+            (uint64_t)(uintptr_t)__kernel_virtual_end - 0xffffffff80000000ull;
+        pmm_mark_reserved(0, 0x100000);
+        pmm_mark_reserved(kernel_start, kernel_end - kernel_start);
+
+        const void *module_address;
+        size_t module_size;
+        if (multiboot2_module(0, &module_address, &module_size)) {
+            pmm_mark_reserved((uint64_t)(uintptr_t)module_address, module_size);
         }
     } else {
         pmm_init(0);
@@ -129,6 +149,12 @@ static void init_filesystems(void)
             struct limine_file *module = module_request.response->modules[0];
             if (module && module->address && module->size) {
                 initrd_load(module->address, (size_t)module->size, root);
+            }
+        } else if (multiboot2_available()) {
+            const void *module_address;
+            size_t module_size;
+            if (multiboot2_module(0, &module_address, &module_size)) {
+                initrd_load(module_address, module_size, root);
             }
         }
     }
@@ -176,6 +202,11 @@ static void init_hardware(void)
     mouse_init();
     if (rsdp_request.response) {
         acpi_init(rsdp_request.response->address);
+    } else {
+        const void *rsdp = multiboot2_rsdp();
+        if (rsdp) {
+            acpi_init((void *)rsdp);
+        }
     }
     pci_device_count = 0;
     pci_scan(pci_boot_probe, 0);
@@ -194,6 +225,15 @@ void kmain(void)
     struct limine_framebuffer_response *fb_response = framebuffer_request.response;
     if (fb_response && fb_response->framebuffer_count > 0) {
         framebuffer_init(fb_response->framebuffers[0]);
+    } else {
+        multiboot2_framebuffer_t framebuffer;
+        if (multiboot2_framebuffer(&framebuffer)) {
+            framebuffer_init_raw(framebuffer.address,
+                                 framebuffer.width,
+                                 framebuffer.height,
+                                 framebuffer.pitch,
+                                 framebuffer.bpp);
+        }
     }
 
     framebuffer_clear(0x101820);
@@ -210,6 +250,8 @@ void kmain(void)
     kprintf("[boot] framebuffer %ux%u\n",
             framebuffer_width(),
             framebuffer_height());
+    kprintf("[boot] protocol=%s\n",
+            multiboot2_available() ? "multiboot2" : "limine");
     if (kernel_address_request.response) {
         kprintf("[boot] kernel phys=%llx virt=%llx\n",
                 (unsigned long long)kernel_address_request.response->physical_base,

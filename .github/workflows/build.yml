@@ -1,0 +1,44 @@
+name: Build nv0ken_linux
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential nasm xorriso grub-pc-bin grub-common mtools
+
+      - name: Build kernel
+        run: bash build.sh kernel
+
+      - name: Verify Multiboot2 image
+        run: grub-file --is-x86-multiboot2 build/kernel.elf
+
+      - name: Build userspace and desktop
+        run: bash build.sh all --no-iso
+
+      - name: Build GRUB ISO
+        run: bash build.sh grub-iso
+
+      - name: Upload boot artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nv0ken-linux-${{ github.sha }}
+          path: |
+            build/kernel.elf
+            build/initrd.tar
+            build/nv0ken-grub.iso
+          if-no-files-found: error

@@ -6,8 +6,11 @@
 
 #define MAX_SYSCALLS 256
 #define ENOSYS_VALUE 38
+#define SYSCALL_STACK_SIZE (32 * 1024)
 
 static syscall_fn_t syscall_table[MAX_SYSCALLS];
+static uint8_t syscall_stack[SYSCALL_STACK_SIZE] __attribute__((aligned(16)));
+uint64_t syscall_kernel_stack_top;
 
 static uint64_t sys_ni(uint64_t a0, uint64_t a1, uint64_t a2,
                        uint64_t a3, uint64_t a4, uint64_t a5)
@@ -27,10 +30,12 @@ void syscall_init(void)
         syscall_table[i] = sys_ni;
     }
 
+    syscall_kernel_stack_top = (uint64_t)(syscall_stack + sizeof(syscall_stack));
+
     uint64_t efer = rdmsr(MSR_EFER);
     wrmsr(MSR_EFER, efer | 1u);
     wrmsr(MSR_LSTAR, (uint64_t)syscall_entry);
-    wrmsr(MSR_STAR, ((uint64_t)GDT_USER_CODE << 48) |
+    wrmsr(MSR_STAR, ((uint64_t)(GDT_USER_CODE - 16) << 48) |
                     ((uint64_t)GDT_KERNEL_CODE << 32));
     wrmsr(MSR_SFMASK, 0x200);
     log_info("syscall", "syscall/sysret entry configured");

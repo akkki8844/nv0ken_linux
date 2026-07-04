@@ -82,10 +82,24 @@ bool framebuffer_init(struct limine_framebuffer *limine_fb)
         return false;
     }
 
-    fb.pixels = limine_fb->address;
-    fb.width = (uint32_t)limine_fb->width;
-    fb.height = (uint32_t)limine_fb->height;
-    fb.pitch_pixels = (uint32_t)(limine_fb->pitch / 4);
+    return framebuffer_init_raw((uint64_t)(uintptr_t)limine_fb->address,
+                                (uint32_t)limine_fb->width,
+                                (uint32_t)limine_fb->height,
+                                (uint32_t)limine_fb->pitch,
+                                (uint8_t)limine_fb->bpp);
+}
+
+bool framebuffer_init_raw(uint64_t address, uint32_t width, uint32_t height,
+                          uint32_t pitch, uint8_t bpp)
+{
+    if (!address || !width || !height || bpp != 32 || pitch < width * 4) {
+        return false;
+    }
+
+    fb.pixels = (uint32_t *)(uintptr_t)address;
+    fb.width = width;
+    fb.height = height;
+    fb.pitch_pixels = pitch / 4;
     fb.fg = 0xd8e7ff;
     fb.bg = 0x101820;
     fb.cursor_x = 2;
