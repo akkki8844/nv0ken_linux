@@ -1,4 +1,5 @@
 CC     = gcc
+LD     = ld
 
 CFLAGS = -std=c11 -Wall -Wextra \
          -ffreestanding -fno-stack-protector \
@@ -13,10 +14,9 @@ CRT0   = $(ROOT)/build/userland/libc/crt0.o
 INCLUDES = -I$(LIBC)/include
 
 LDFLAGS = \
-    -L$(ROOT)/build/userland/libc \
-    -lc \
-    -nostdlib \
-    -static
+    -L$(ROOT)/build/userland/libc
+
+LDLIBS = --start-group -lc --end-group
 
 TARGET = $(BUILD)/init
 
@@ -31,7 +31,7 @@ $(BUILD):
 	mkdir -p $(BUILD)
 
 $(TARGET): $(OBJS) $(CRT0)
-	$(CC) $(CRT0) $(OBJS) $(LDFLAGS) -o $@
+	$(LD) -m elf_x86_64 -static -o $@ $(CRT0) $(OBJS) $(LDFLAGS) $(LDLIBS)
 
 $(BUILD)/%.o: %.c
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@

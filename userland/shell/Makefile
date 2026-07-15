@@ -1,4 +1,5 @@
 CC     = gcc
+LD     = ld
 
 CFLAGS = -std=c11 -Wall -Wextra \
          -ffreestanding -fno-stack-protector \
@@ -12,10 +13,9 @@ BUILD  = $(ROOT)/build/userland/shell
 INCLUDES = -I. -I$(LIBC)/include
 
 LDFLAGS = \
-    -L$(ROOT)/build/userland/libc \
-    -lc \
-    -nostdlib \
-    -static
+    -L$(ROOT)/build/userland/libc
+
+LDLIBS = --start-group -lc --end-group
 
 TARGET = $(BUILD)/nv0sh
 
@@ -38,7 +38,7 @@ $(BUILD):
 	mkdir -p $(BUILD)
 
 $(TARGET): $(OBJS)
-	$(CC) $(CRT0) $(OBJS) $(LDFLAGS) -o $@
+	$(LD) -m elf_x86_64 -static -o $@ $(CRT0) $(OBJS) $(LDFLAGS) $(LDLIBS)
 
 $(BUILD)/%.o: %.c
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
