@@ -7,6 +7,7 @@
 #include "arch/x86_64/paging.h"
 #include "boot/multiboot2.h"
 #include "drivers/acpi.h"
+#include "drivers/ata.h"
 #include "drivers/console.h"
 #include "drivers/framebuffer.h"
 #include "drivers/keyboard.h"
@@ -84,6 +85,7 @@ LIMINE_REQUEST_TERMINATE;
 static unsigned char bootstrap_heap[1024 * 1024] __attribute__((aligned(16)));
 static addr_space_t kernel_address_space;
 static unsigned pci_device_count;
+static unsigned ata_device_count;
 extern char __kernel_virtual_end[];
 
 static void halt_forever(void)
@@ -212,6 +214,10 @@ static void init_hardware(void)
     }
     pci_device_count = 0;
     pci_scan(pci_boot_probe, 0);
+    ata_device_count = 0;
+    for (uint8_t drive = 0; drive < 2; ++drive) {
+        ata_device_count += ata_device_present(drive) ? 1u : 0u;
+    }
     cpu_sti();
 }
 
@@ -271,8 +277,8 @@ void kmain(void)
     kprintf("[mem ] regions=%zu free_frames=%zu heap_free=%zu bytes\n",
             mmap_region_count(), pmm_free_count(), heap_bytes_free());
     kprintf("[fs  ] tmpfs root and initrd mounted; /dev/klog ready\n");
-    kprintf("[hw  ] timer, PS/2 input, ACPI, PCI (%u devices) online\n",
-            pci_device_count);
+    kprintf("[hw  ] timer, PS/2 input, ACPI, PCI (%u devices), ATA (%u drives) online\n",
+            pci_device_count, ata_device_count);
     kprintf("[net ] ARP, IPv4, ICMP, UDP, TCP and sockets initialized\n");
     kprintf("[ ok ] kernel initialization complete\n\n");
 

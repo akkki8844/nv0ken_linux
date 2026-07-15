@@ -13,20 +13,44 @@ int path_normalize(const char *input, char *output, size_t output_size)
         return -1;
     }
 
-    size_t out = 0;
-    if (!path_is_absolute(input)) {
-        output[out++] = '/';
-    }
+    size_t out = 1;
+    size_t in = 0;
+    output[0] = '/';
 
-    for (size_t in = 0; input[in] && out + 1 < output_size; ++in) {
-        if (input[in] == '/' && out > 0 && output[out - 1] == '/') {
+    while (input[in]) {
+        while (input[in] == '/') {
+            ++in;
+        }
+        size_t component_start = in;
+        while (input[in] && input[in] != '/') {
+            ++in;
+        }
+        size_t component_length = in - component_start;
+        if (component_length == 0 ||
+            (component_length == 1 && input[component_start] == '.')) {
             continue;
         }
-        output[out++] = input[in];
-    }
+        if (component_length == 2 && input[component_start] == '.' &&
+            input[component_start + 1] == '.') {
+            while (out > 1 && output[out - 1] != '/') {
+                --out;
+            }
+            if (out > 1) {
+                --out;
+            }
+            continue;
+        }
 
-    if (out > 1 && output[out - 1] == '/') {
-        --out;
+        size_t separator = out > 1 ? 1 : 0;
+        if (out + separator >= output_size ||
+            component_length > output_size - out - separator - 1) {
+            return -1;
+        }
+        if (separator) {
+            output[out++] = '/';
+        }
+        memcpy(output + out, input + component_start, component_length);
+        out += component_length;
     }
     output[out] = '\0';
     return 0;
