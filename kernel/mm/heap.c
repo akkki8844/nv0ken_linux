@@ -54,6 +54,9 @@ static void split_block(block_header_t *block, size_t size)
 
 void *kmalloc(size_t size)
 {
+    if (size == 0 || size > (size_t)-16) {
+        return 0;
+    }
     size = align_size(size);
     for (block_header_t *block = head; block; block = block->next) {
         if (block->free && block->size >= size) {
@@ -68,6 +71,9 @@ void *kmalloc(size_t size)
 
 void *kcalloc(size_t count, size_t size)
 {
+    if (count != 0 && size > (size_t)-1 / count) {
+        return 0;
+    }
     size_t total = count * size;
     void *ptr = kmalloc(total);
     if (ptr) {
@@ -96,6 +102,10 @@ void kfree(void *ptr)
         return;
     }
     block_header_t *block = ((block_header_t *)ptr) - 1;
+    if ((char *)block < (char *)head ||
+        (char *)block >= (char *)head + total_size + sizeof(block_header_t)) {
+        return;
+    }
     if (!block->free) {
         used_size -= block->size;
     }
@@ -113,6 +123,11 @@ void *krealloc(void *ptr, size_t size)
         return 0;
     }
     block_header_t *block = ((block_header_t *)ptr) - 1;
+    if ((char *)block < (char *)head ||
+        (char *)block >= (char *)head + total_size + sizeof(block_header_t) ||
+        block->free) {
+        return 0;
+    }
     if (block->size >= size) {
         return ptr;
     }

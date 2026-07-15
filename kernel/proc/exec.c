@@ -2,6 +2,7 @@
 
 #include "../lib/string.h"
 #include "elf_loader.h"
+#include "scheduler.h"
 
 int exec_image(process_t *process, const char *name, const void *image, size_t size)
 {
@@ -21,6 +22,10 @@ int exec_image(process_t *process, const char *name, const void *image, size_t s
 
     if (!process->main_thread) {
         process->main_thread = thread_create(process->pid, loaded.entry, 0);
+        if (!process->main_thread) {
+            return -1;
+        }
+        scheduler_add(process->main_thread);
     } else {
         process->main_thread->instruction_pointer = loaded.entry;
     }

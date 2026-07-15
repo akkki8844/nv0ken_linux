@@ -25,6 +25,7 @@
 #include "mm/heap.h"
 #include "mm/mmap.h"
 #include "mm/pmm.h"
+#include "mm/vmm.h"
 #include "monitor.h"
 #include "net/arp.h"
 #include "net/netdev.h"
@@ -132,6 +133,7 @@ static void init_memory(void)
 
     uint64_t hhdm_offset = hhdm_request.response ? hhdm_request.response->offset : 0;
     paging_init(0);
+    vmm_init(paging_current_cr3(), hhdm_offset);
     addr_space_init_kernel(&kernel_address_space, paging_current_cr3(), hhdm_offset);
 }
 
