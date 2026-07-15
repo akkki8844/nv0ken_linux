@@ -8,33 +8,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-struct WindowManager {
-    Compositor *comp;
-    int         screen_w;
-    int         screen_h;
-    int         taskbar_h;
-
-    Window      windows[WM_MAX_WINDOWS];
-    int         window_count;
-    int         next_win_id;
-
-    int         focused_id;
-    int         drag_win_id;
-    int         drag_mode;
-    int         drag_start_mx;
-    int         drag_start_my;
-    int         drag_start_wx;
-    int         drag_start_wy;
-    int         drag_start_ww;
-    int         drag_start_wh;
-
-    int         snap_preview_x;
-    int         snap_preview_y;
-    int         snap_preview_w;
-    int         snap_preview_h;
-    int         snap_preview_active;
-};
-
 #define DRAG_NONE   0
 #define DRAG_MOVE   1
 #define DRAG_RESIZE 2

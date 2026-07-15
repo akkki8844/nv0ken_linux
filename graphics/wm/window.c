@@ -3,6 +3,7 @@
 #include "../draw/draw.h"
 #include "../draw/color.h"
 #include "../font/font_render.h"
+#include <string.h>
 
 #define SHADOW_STEPS   6
 #define SHADOW_BASE_A  0x55

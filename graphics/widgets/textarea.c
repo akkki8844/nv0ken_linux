@@ -107,8 +107,8 @@ static void on_hscroll(void *ud, int val) {
 
 static void layout_scrollbars(Textarea *ta) {
     Widget *w = &ta->base;
-    scrollbar_set_range(ta->vscroll, 0, ta->line_count, ta->visible_rows(ta));
-    scrollbar_set_range(ta->hscroll, 0, 200, ta->visible_cols(ta));
+    scrollbar_set_range(ta->vscroll, 0, ta->line_count, visible_rows(ta));
+    scrollbar_set_range(ta->hscroll, 0, 200, visible_cols(ta));
     ta->vscroll->base.x = w->x + w->w - SB_W;
     ta->vscroll->base.y = w->y;
     ta->vscroll->base.w = SB_W;

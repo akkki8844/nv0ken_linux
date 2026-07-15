@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <stdio.h>
 
 /* nv0ken uses a minimal socket-like IPC built on kernel pipes/FIFOs
  * since BSD sockets are in the phase-6 network stack.
@@ -85,7 +86,9 @@ int ipc_server_start(IpcServer *srv) {
     if (!srv) return -1;
 
     unlink(RENDEZVOUS_FIFO);
-    if (mkfifo(RENDEZVOUS_FIFO, 0666) < 0 && errno != EEXIST) return -1;
+    int endpoint = open(RENDEZVOUS_FIFO, O_CREAT | O_RDWR, 0666);
+    if (endpoint < 0 && errno != EEXIST) return -1;
+    if (endpoint >= 0) close(endpoint);
 
     srv->rendezvous_fd = open(RENDEZVOUS_FIFO, O_RDONLY | O_NONBLOCK);
     if (srv->rendezvous_fd < 0) return -1;

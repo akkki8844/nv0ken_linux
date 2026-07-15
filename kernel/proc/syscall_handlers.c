@@ -647,11 +647,11 @@ long sys_socket(uint64_t domain, uint64_t type, uint64_t protocol,
 long sys_connect(uint64_t fd, uint64_t addr, uint64_t addrlen,
                  uint64_t unused4, uint64_t unused5, uint64_t unused6)
 {
-    (void)addrlen;
     (void)unused4;
     (void)unused5;
     (void)unused6;
-    return socket_connect((int)fd, (uint32_t)addr, 0) == 0 ? 0 : errno_ret(EBADF);
+    return socket_connect((int)fd, (uint32_t)addr, (uint16_t)addrlen) == 0
+        ? 0 : errno_ret(EBADF);
 }
 
 long sys_shmget(uint64_t key, uint64_t size, uint64_t flags,

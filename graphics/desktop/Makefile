@@ -5,7 +5,7 @@ CFLAGS = -std=c11 -Wall -Wextra \
          -fno-pie -fno-pic -m64 \
          -O2 -g
 
-ROOT   = ../../..
+ROOT   = ../..
 LIBC   = $(ROOT)/userland/libc
 LIBNV0 = $(ROOT)/libnv0
 BUILD  = $(ROOT)/build/graphics/desktop

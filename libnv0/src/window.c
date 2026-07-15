@@ -219,7 +219,11 @@ int nv_window_dispatch(uint32_t type, const void *payload, uint32_t length)
         if (!window) {
             return -1;
         }
-        NvKeyEvent event = {key->key, key->codepoint, key->modifiers};
+        NvKeyEvent event = {
+            .key = key->key,
+            .codepoint = key->codepoint,
+            .modifiers = key->modifiers,
+        };
         if (type == NV_MSG_KEY_DOWN && window->on_key_down) {
             window->on_key_down(window, &event, window->key_down_userdata);
         } else if (type == NV_MSG_KEY_UP && window->on_key_up) {
@@ -234,7 +238,12 @@ int nv_window_dispatch(uint32_t type, const void *payload, uint32_t length)
         if (!window) {
             return -1;
         }
-        NvMouseEvent event = {mouse->x, mouse->y, mouse->button, mouse->modifiers};
+        NvMouseEvent event = {
+            .x = mouse->x,
+            .y = mouse->y,
+            .button = mouse->button,
+            .modifiers = mouse->modifiers,
+        };
         if (type == NV_MSG_MOUSE_DOWN && window->on_mouse_down) {
             window->on_mouse_down(window, &event, window->mouse_down_userdata);
         } else if (type == NV_MSG_MOUSE_UP && window->on_mouse_up) {
@@ -248,7 +257,12 @@ int nv_window_dispatch(uint32_t type, const void *payload, uint32_t length)
         const IpcScrollEvent *scroll = payload;
         NvWindow *window = nv_window_find((int)scroll->window_id);
         if (window && window->on_scroll) {
-            NvScrollEvent event = {scroll->delta_x, scroll->delta_y};
+            NvScrollEvent event = {
+                .x = window->x,
+                .y = window->y,
+                .delta_x = scroll->delta_x,
+                .delta_y = scroll->delta_y,
+            };
             window->on_scroll(window, &event, window->scroll_userdata);
         }
         return 0;

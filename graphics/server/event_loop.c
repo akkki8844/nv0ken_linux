@@ -4,6 +4,9 @@
 #include "cursor.h"
 #include <stdlib.h>
 #include <string.h>
+#include <fcntl.h>
+#include <time.h>
+#include <unistd.h>
 #include "../../libnv0/include/nv0/input.h"
 
 #define MAX_TIMERS 16
@@ -102,9 +105,9 @@ static void *xmalloc(size_t n) {
 }
 
 static long long get_ms(void) {
-    long long t;
-    sys_time(&t);
-    return t * 1000;
+    struct timespec now;
+    if (clock_gettime(CLOCK_MONOTONIC, &now) < 0) return 0;
+    return (long long)now.tv_sec * 1000 + now.tv_nsec / 1000000;
 }
 
 EventLoop *event_loop_new(Display *display, IpcServer *ipc) {

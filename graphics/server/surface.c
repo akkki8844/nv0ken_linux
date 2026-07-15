@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+extern long sys_shmat(int shm_id, const void *address, int flags);
+extern long sys_shmdt(const void *address);
+
 static int g_next_surface_id = 1;
 
 static void *xmalloc(size_t n) {

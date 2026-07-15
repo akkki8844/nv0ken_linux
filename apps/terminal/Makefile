@@ -1,11 +1,12 @@
 CC     = gcc
+LD     = ld
 
 CFLAGS = -std=c11 -Wall -Wextra -Wpedantic \
          -ffreestanding -fno-stack-protector \
          -fno-pie -fno-pic -m64 \
          -O2 -g -DNV0KEN_KERNEL
 
-ROOT   = ../../..
+ROOT   = ../..
 LIBNV0 = $(ROOT)/libnv0
 LIBC   = $(ROOT)/userland/libc
 BUILD  = $(ROOT)/build/apps/terminal
@@ -18,11 +19,9 @@ INCLUDES = \
 
 LDFLAGS = \
     -L$(ROOT)/build/libnv0 \
-    -L$(ROOT)/build/userland/libc \
-    -lnv0 \
-    -lc \
-    -nostdlib \
-    -static
+    -L$(ROOT)/build/userland/libc
+
+LDLIBS = --start-group -lnv0 -lc --end-group
 
 TARGET = $(BUILD)/terminal
 
@@ -41,7 +40,7 @@ $(BUILD):
 	mkdir -p $(BUILD)
 
 $(TARGET): $(OBJS) $(CRT0)
-	$(CC) $(CRT0) $(OBJS) $(LDFLAGS) -o $@
+	$(LD) -m elf_x86_64 -static -o $@ $(CRT0) $(OBJS) $(LDFLAGS) $(LDLIBS)
 
 $(BUILD)/%.o: %.c
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@

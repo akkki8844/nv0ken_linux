@@ -545,17 +545,46 @@ static char *decode_chunked(const char *body, size_t body_len, size_t *out_len) 
 #ifdef NV0KEN_KERNEL
 #include "../../userland/libc/include/unistd.h"
 #include "../../userland/libc/include/sys/types.h"
+extern long sys_socket(int domain, int type, int protocol);
+extern long sys_connect(int fd, unsigned long address, unsigned long port);
+
+static int parse_ipv4(const char *host, unsigned long *address) {
+    unsigned long result = 0;
+    for (int part = 0; part < 4; part++) {
+        unsigned value = 0;
+        int digits = 0;
+        while (*host >= '0' && *host <= '9') {
+            value = value * 10 + (unsigned)(*host++ - '0');
+            if (value > 255) return -1;
+            digits++;
+        }
+        if (!digits || (part < 3 && *host++ != '.') || (part == 3 && *host)) return -1;
+        result |= (unsigned long)value << (part * 8);
+    }
+    *address = result;
+    return 0;
+}
+
 static int tcp_connect(const char *host, int port) {
-    return sys_tcp_connect(host, port);
+    unsigned long address;
+    if (strcmp(host, "localhost") == 0) address = 0x0100007fUL;
+    else if (parse_ipv4(host, &address) < 0) return -1;
+    int fd = (int)sys_socket(2, 1, 0);
+    if (fd < 0) return -1;
+    if (sys_connect(fd, address, (unsigned long)port) < 0) {
+        close(fd);
+        return -1;
+    }
+    return fd;
 }
 static int tcp_send(int fd, const char *buf, size_t len) {
-    return sys_write(fd, buf, len);
+    return (int)write(fd, buf, len);
 }
 static int tcp_recv(int fd, char *buf, size_t len) {
-    return sys_read(fd, buf, len);
+    return (int)read(fd, buf, len);
 }
 static void tcp_close(int fd) {
-    sys_close(fd);
+    close(fd);
 }
 #else
 #include <sys/types.h>
