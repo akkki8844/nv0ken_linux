@@ -61,10 +61,11 @@ apps/calculator: userland/libc libnv0
 apps/browser: userland/libc libnv0
 	$(MAKE) -C apps/browser
 
-initrd:
+initrd: userland/init userland/shell userland/utils apps/terminal apps/text_editor \
+        apps/file_manager apps/image_viewer apps/calculator apps/browser
 	bash tools/pack_initrd.sh
 
-iso: kernel
+iso: kernel initrd
 	bash tools/mkiso.sh
 
 grub-iso: kernel initrd

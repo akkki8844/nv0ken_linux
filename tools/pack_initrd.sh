@@ -27,13 +27,45 @@ copy_if_exists() {
     fi
 }
 
+require_file() {
+    local path="$1"
+    if [[ ! -f "$path" ]]; then
+        echo "error: required runtime file is missing: $path" >&2
+        exit 1
+    fi
+}
+
+require_elf_binary() {
+    local path="$1"
+    require_file "$path"
+    if [[ "$(od -An -tx1 -N4 "$path" | tr -d '[:space:]')" != "7f454c46" ]]; then
+        echo "error: required runtime file is not an ELF binary: $path" >&2
+        exit 1
+    fi
+}
+
+require_elf_binary "$BUILD/userland/init/init"
+require_elf_binary "$BUILD/userland/shell/nv0sh"
+
+for utility in ls cat echo mkdir rm rmdir cp mv pwd touch stat chmod chown \
+               ps kill uname date sleep mount umount dmesg env which \
+               head tail wc grep find hexdump; do
+    require_elf_binary "$BUILD/userland/utils/$utility"
+done
+
+for app in terminal text_editor file_manager image_viewer calculator browser; do
+    require_elf_binary "$BUILD/apps/$app/$app"
+done
+
 copy_if_exists "$ROOT/userland/init/inittab" "$INITRD_ROOT/etc/inittab"
 copy_if_exists "$BUILD/userland/init/init" "$INITRD_ROOT/init"
 copy_if_exists "$BUILD/userland/shell/nv0sh" "$INITRD_ROOT/bin/nv0sh"
 
-if [[ -d "$BUILD/userland/utils" ]]; then
-    find "$BUILD/userland/utils" -maxdepth 1 -type f -exec cp {} "$INITRD_ROOT/bin/" \;
-fi
+for utility in ls cat echo mkdir rm rmdir cp mv pwd touch stat chmod chown \
+               ps kill uname date sleep mount umount dmesg env which \
+               head tail wc grep find hexdump; do
+    cp "$BUILD/userland/utils/$utility" "$INITRD_ROOT/bin/$utility"
+done
 
 for app in terminal text_editor file_manager image_viewer calculator browser; do
     copy_if_exists "$BUILD/apps/$app/$app" "$INITRD_ROOT/apps/$app"

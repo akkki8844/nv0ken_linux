@@ -19,12 +19,14 @@ OBJS := $(OBJ_BOOT_ASM) $(OBJ_ASM) $(OBJ_C)
 
 TARGET := $(BUILD)/kernel.elf
 
-.PHONY: all clean
+.PHONY: all clean FORCE
 
 all: $(TARGET)
 
-$(TARGET): $(OBJS) kernel.ld
+$(TARGET): FORCE $(OBJS) kernel.ld
 	$(LD) $(LDFLAGS) $(OBJS) -o $@
+
+FORCE:
 
 $(OUT)/%.c.o: %.c
 	mkdir -p $(dir $@)

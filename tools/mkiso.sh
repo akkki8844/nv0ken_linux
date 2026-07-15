@@ -8,10 +8,30 @@ LIMINE_DIR="$ISO_ROOT/boot/limine"
 EFI_DIR="$ISO_ROOT/EFI/BOOT"
 OUT="$BUILD/nv0ken.iso"
 
+GIT_BIN="${GIT:-git}"
+if ! command -v "$GIT_BIN" >/dev/null 2>&1; then
+    if [[ -x "/c/Program Files/Git/cmd/git.exe" ]]; then
+        GIT_BIN="/c/Program Files/Git/cmd/git.exe"
+    else
+        echo "error: git is required to fetch Limine" >&2
+        exit 1
+    fi
+fi
+
+if [[ ! -s "$BUILD/kernel.elf" ]]; then
+    echo "error: a non-empty kernel image is required; run: make kernel" >&2
+    exit 1
+fi
+
+if [[ "$(od -An -tx1 -N4 "$BUILD/kernel.elf" | tr -d '[:space:]')" != "7f454c46" ]]; then
+    echo "error: kernel image is not an ELF binary: $BUILD/kernel.elf" >&2
+    exit 1
+fi
+
 if [ ! -f "$ROOT/tools/limine/limine" ]; then
     echo "Limine not found. Fetching..."
     mkdir -p "$ROOT/tools/limine"
-    git clone https://github.com/limine-bootloader/limine.git \
+    "$GIT_BIN" clone https://github.com/limine-bootloader/limine.git \
         --branch=v7.x-binary --depth=1 "$ROOT/tools/limine"
 fi
 
