@@ -41,7 +41,9 @@ mkdir -p "$LIMINE_DIR"
 mkdir -p "$EFI_DIR"
 
 cp "$BUILD/kernel.elf"                    "$ISO_ROOT/kernel.elf"
-cp "$ROOT/boot/limine.conf"               "$LIMINE_DIR/limine.conf"
+rm -f "$ISO_ROOT/limine.conf" "$LIMINE_DIR/limine.conf"
+cp "$ROOT/boot/limine.conf"               "$ISO_ROOT/limine.cfg"
+cp "$ROOT/boot/limine.conf"               "$LIMINE_DIR/limine.cfg"
 if [ -f "$BUILD/initrd.tar" ]; then
     cp "$BUILD/initrd.tar" "$ISO_ROOT/initrd.tar"
 else

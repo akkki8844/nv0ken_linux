@@ -6,8 +6,8 @@ BUILD="$ROOT/build"
 ISO_ROOT="$BUILD/grub_iso"
 OUT="$BUILD/nv0ken-grub.iso"
 
-if [[ ! -f "$BUILD/kernel.elf" ]]; then
-    echo "error: $BUILD/kernel.elf not found; run: bash build.sh kernel" >&2
+if [[ ! -f "$BUILD/kernel-grub.elf" ]]; then
+    echo "error: $BUILD/kernel-grub.elf not found; run: bash build.sh kernel" >&2
     exit 1
 fi
 
@@ -18,7 +18,7 @@ fi
 
 rm -rf "$ISO_ROOT"
 mkdir -p "$ISO_ROOT/boot/grub"
-cp "$BUILD/kernel.elf" "$ISO_ROOT/boot/kernel.elf"
+cp "$BUILD/kernel-grub.elf" "$ISO_ROOT/boot/kernel.elf"
 cp "$ROOT/boot/grub.cfg" "$ISO_ROOT/boot/grub/grub.cfg"
 if [[ -f "$BUILD/initrd.tar" ]]; then
     cp "$BUILD/initrd.tar" "$ISO_ROOT/boot/initrd.tar"

@@ -1,10 +1,9 @@
-ENTRY(multiboot2_start)
+ENTRY(_start)
 
 KERNEL_VMA = 0xffffffff80000000;
 
 PHDRS
 {
-    boot PT_LOAD FLAGS(7);
     text PT_LOAD FLAGS(5);
     rodata PT_LOAD FLAGS(4);
     data PT_LOAD FLAGS(6);
@@ -12,20 +11,9 @@ PHDRS
 
 SECTIONS
 {
-    . = 1M;
+    . = KERNEL_VMA + 1M;
 
-    .boot : ALIGN(4K) {
-        KEEP(*(.multiboot2))
-        *(.boot.text)
-        *(.boot.setup)
-        *(.boot.data)
-        *(.boot.bss)
-    } :boot
-
-    KERNEL_LMA = ALIGN(LOADADDR(.boot) + SIZEOF(.boot), 4K);
-    . = KERNEL_VMA + KERNEL_LMA;
-
-    .text ALIGN(4K) : AT(KERNEL_LMA) {
+    .text ALIGN(4K) : AT(1M) {
         KEEP(*(.limine_requests_start))
         KEEP(*(.limine_requests))
         KEEP(*(.limine_requests_end))

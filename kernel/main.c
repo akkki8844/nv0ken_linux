@@ -215,12 +215,16 @@ static void init_hardware(void)
 
 void kmain(void)
 {
-    klog_clear();
     cpu_init();
     serial_init(COM1);
+    klog_clear();
+    serial_write("[boot] entered kmain\n");
     gdt_init();
+    serial_write("[boot] gdt initialized\n");
     idt_init();
+    serial_write("[boot] idt initialized\n");
     irq_init();
+    serial_write("[boot] pic initialized\n");
 
     struct limine_framebuffer_response *fb_response = framebuffer_request.response;
     if (fb_response && fb_response->framebuffer_count > 0) {
@@ -238,9 +242,13 @@ void kmain(void)
 
     framebuffer_clear(0x101820);
 
+    serial_write("[boot] initializing memory\n");
     init_memory();
+    serial_write("[boot] initializing filesystems\n");
     init_filesystems();
+    serial_write("[boot] initializing services\n");
     init_kernel_services();
+    serial_write("[boot] initializing hardware\n");
     init_hardware();
 
     kprintf("\n+--------------------------------------------------+\n");
