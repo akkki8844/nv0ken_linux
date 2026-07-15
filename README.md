@@ -177,4 +177,6 @@ see `docs/roadmap.md` for the full task checklist.
 
 ## license
 
-this project is for educational purposes.
+nv0ken is released under the [MIT License](LICENSE). See
+[docs/README.md](docs/README.md) for the complete technical, product, legal,
+and contributor documentation set.
