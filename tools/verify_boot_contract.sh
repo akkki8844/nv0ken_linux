@@ -30,8 +30,9 @@ for section in .limine_requests_start .limine_requests .limine_requests_end; do
 done
 
 [[ -s "$INITRD" ]] || fail "missing initrd archive: $INITRD"
+archive_contents="$(tar -tf "$INITRD")"
 for path in ./init ./bin/nv0sh ./etc/inittab; do
-    tar -tf "$INITRD" | grep -Fxq "$path" || fail "initrd is missing $path"
+    grep -Fxq "$path" <<<"$archive_contents" || fail "initrd is missing $path"
 done
 
 grep -Fxq 'KERNEL_PATH=boot:///kernel.elf' "$ROOT/boot/limine.conf" || fail "Limine kernel path is invalid"
