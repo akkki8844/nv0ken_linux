@@ -25,10 +25,19 @@ SECTIONS
     KERNEL_LMA = ALIGN(LOADADDR(.boot) + SIZEOF(.boot), 4K);
     . = KERNEL_VMA + KERNEL_LMA;
 
-    .text ALIGN(4K) : AT(KERNEL_LMA) {
+    .limine_requests_start ALIGN(8) : AT(KERNEL_LMA) {
         KEEP(*(.limine_requests_start))
+    } :text
+
+    .limine_requests ALIGN(8) : AT(ALIGN(LOADADDR(.limine_requests_start) + SIZEOF(.limine_requests_start), 8)) {
         KEEP(*(.limine_requests))
+    } :text
+
+    .limine_requests_end ALIGN(8) : AT(ALIGN(LOADADDR(.limine_requests) + SIZEOF(.limine_requests), 8)) {
         KEEP(*(.limine_requests_end))
+    } :text
+
+    .text ALIGN(4K) : AT(ALIGN(LOADADDR(.limine_requests_end) + SIZEOF(.limine_requests_end), 4K)) {
         *(.text .text.*)
     } :text
 
