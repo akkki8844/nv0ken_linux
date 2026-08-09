@@ -74,6 +74,12 @@ jobs:
       - name: Smoke-test GRUB boot in QEMU
         run: bash tools/qemu_boot_smoke.sh
 
+      - name: Build Limine ISO
+        run: bash build.sh iso
+
+      - name: Smoke-test Limine boot in QEMU
+        run: bash tools/qemu_boot_smoke.sh build/nv0ken.iso build/qemu-limine-serial.log
+
       - name: Upload boot artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -82,4 +88,7 @@ jobs:
             build/kernel.elf
             build/initrd.tar
             build/nv0ken-grub.iso
+            build/nv0ken.iso
+            build/qemu-serial.log
+            build/qemu-limine-serial.log
           if-no-files-found: error
