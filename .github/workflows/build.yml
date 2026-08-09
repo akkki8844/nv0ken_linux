@@ -42,7 +42,7 @@ jobs:
           fi
 
       - name: Verify Multiboot2 image
-        run: grub-file --is-x86-multiboot2 build/kernel.elf
+        run: grub-file --is-x86-multiboot2 build/kernel-grub.elf
 
       - name: Build userspace and desktop
         shell: bash
