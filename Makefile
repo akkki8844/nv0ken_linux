@@ -18,7 +18,7 @@ SUBMAKES := \
     apps/calculator \
     apps/browser
 
-.PHONY: all clean $(SUBMAKES) iso grub-iso initrd check-boot run run-grub run-debug
+.PHONY: all clean $(SUBMAKES) iso grub-iso initrd check-boot smoke-boot run run-grub run-debug
 
 all: $(SUBMAKES) initrd iso
 
@@ -73,6 +73,9 @@ grub-iso: kernel initrd
 
 check-boot: kernel initrd
 	bash tools/verify_boot_contract.sh
+
+smoke-boot: grub-iso
+	bash tools/qemu_boot_smoke.sh
 
 run: all
 	bash tools/run_qemu.sh
