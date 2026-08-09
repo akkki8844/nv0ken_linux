@@ -75,6 +75,7 @@ static void command_cat(const char *path)
 
     char buffer[128];
     size_t offset = 0;
+    char last = '\0';
     for (;;) {
         int read = vfs_read(node, offset, buffer, sizeof(buffer));
         if (read <= 0) {
@@ -83,9 +84,10 @@ static void command_cat(const char *path)
         for (int index = 0; index < read; ++index) {
             kputchar(buffer[index]);
         }
+        last = buffer[read - 1];
         offset += (size_t)read;
     }
-    if (offset == 0 || buffer[(offset - 1) % sizeof(buffer)] != '\n') {
+    if (offset == 0 || last != '\n') {
         kputchar('\n');
     }
 }

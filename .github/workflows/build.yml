@@ -68,6 +68,9 @@ jobs:
       - name: Build GRUB ISO
         run: bash build.sh grub-iso
 
+      - name: Verify boot contract
+        run: bash tools/verify_boot_contract.sh
+
       - name: Upload boot artifacts
         uses: actions/upload-artifact@v4
         with:

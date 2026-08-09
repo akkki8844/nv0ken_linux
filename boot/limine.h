@@ -297,9 +297,17 @@ struct limine_stack_size_response {
 #define LIMINE_REQUEST \
     __attribute__((used, section(".limine_requests")))
 
+#define LIMINE_REQUESTS_START_MARKER \
+    __attribute__((used, section(".limine_requests_start"))) \
+    static volatile uint64_t _limine_requests_start[] = { \
+        0xf6b8f4b39de7d1ae, 0xfab91a6940fcb9cf \
+    }
+
 #define LIMINE_REQUEST_TERMINATE \
     __attribute__((used, section(".limine_requests_end"))) \
-    static volatile uint64_t _limine_requests_end[] = {0, 0}
+    static volatile uint64_t _limine_requests_end[] = { \
+        0xadc0e0531bb10d03, 0x9572709f31764c62 \
+    }
 
 #define LIMINE_BASE_REVISION(n) \
     __attribute__((used, section(".limine_requests"))) \

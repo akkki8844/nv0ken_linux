@@ -2,6 +2,12 @@
 
 #include <stddef.h>
 
+#include "../lib/string.h"
+
+#define FONT_WIDTH 5u
+#define FONT_HEIGHT 7u
+#define LINE_HEIGHT 10u
+
 struct framebuffer_state {
     uint32_t *pixels;
     uint32_t width;
@@ -142,7 +148,27 @@ void framebuffer_clear(uint32_t rgb)
 static void newline(void)
 {
     fb.cursor_x = 2;
-    fb.cursor_y += 10;
+    fb.cursor_y += LINE_HEIGHT;
+    if (fb.cursor_y + FONT_HEIGHT < fb.height) {
+        return;
+    }
+
+    /* Keep the recovery console usable after a long boot log instead of
+     * silently drawing beyond the framebuffer. */
+    if (fb.height <= LINE_HEIGHT) {
+        framebuffer_clear(fb.bg);
+        return;
+    }
+    size_t retained_rows = fb.height - LINE_HEIGHT;
+    memmove(fb.pixels,
+            fb.pixels + LINE_HEIGHT * fb.pitch_pixels,
+            retained_rows * fb.pitch_pixels * sizeof(*fb.pixels));
+    for (uint32_t y = (uint32_t)retained_rows; y < fb.height; ++y) {
+        for (uint32_t x = 0; x < fb.width; ++x) {
+            fb.pixels[y * fb.pitch_pixels + x] = fb.bg;
+        }
+    }
+    fb.cursor_y = fb.height - LINE_HEIGHT;
 }
 
 void framebuffer_putc(char ch)
@@ -156,15 +182,19 @@ void framebuffer_putc(char ch)
         return;
     }
 
-    if (fb.cursor_x + 7 >= fb.width) {
+    if (fb.cursor_x + FONT_WIDTH + 2 >= fb.width) {
         newline();
     }
 
-    const uint8_t *glyph = font5x7[(uint8_t)normalize_char(ch)];
-    for (uint32_t row = 0; row < 7; ++row) {
+    unsigned glyph_index = (unsigned char)normalize_char(ch);
+    if (glyph_index >= sizeof(font5x7) / sizeof(font5x7[0])) {
+        glyph_index = ' ';
+    }
+    const uint8_t *glyph = font5x7[glyph_index];
+    for (uint32_t row = 0; row < FONT_HEIGHT; ++row) {
         uint8_t bits = glyph[row];
-        for (uint32_t col = 0; col < 5; ++col) {
-            uint32_t color = (bits & (1u << (4 - col))) ? fb.fg : fb.bg;
+        for (uint32_t col = 0; col < FONT_WIDTH; ++col) {
+            uint32_t color = (bits & (1u << (FONT_WIDTH - 1 - col))) ? fb.fg : fb.bg;
             put_pixel(fb.cursor_x + col, fb.cursor_y + row, color);
         }
     }

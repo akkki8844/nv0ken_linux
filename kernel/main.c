@@ -35,6 +35,9 @@
 #include "proc/scheduler.h"
 #include "proc/syscall_table.h"
 
+/* Keep the request delimiters in their own sections: Limine scans these
+ * before control reaches _start, so a linker-visible boundary is required. */
+LIMINE_REQUESTS_START_MARKER;
 LIMINE_BASE_REVISION(2);
 
 LIMINE_REQUEST static volatile struct limine_stack_size_request stack_size_request = {
