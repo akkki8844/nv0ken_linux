@@ -28,9 +28,17 @@ if [[ "$(od -An -tx1 -N4 "$BUILD/kernel.elf" | tr -d '[:space:]')" != "7f454c46"
     exit 1
 fi
 
-if [ ! -f "$ROOT/tools/limine/limine" ]; then
+if [ ! -f "$ROOT/tools/limine/limine-bios.sys" ] || \
+   [ ! -f "$ROOT/tools/limine/limine-bios-cd.bin" ] || \
+   [ ! -f "$ROOT/tools/limine/limine-uefi-cd.bin" ] || \
+   [ ! -f "$ROOT/tools/limine/BOOTX64.EFI" ] || \
+   [ ! -x "$ROOT/tools/limine/limine" ]; then
+    if [ -d "$ROOT/tools/limine" ] && [ "$(find "$ROOT/tools/limine" -mindepth 1 -maxdepth 1 | wc -l)" -gt 0 ]; then
+        echo "error: Limine directory is incomplete: $ROOT/tools/limine" >&2
+        echo "remove it and re-run the build to fetch a complete Limine binary release" >&2
+        exit 1
+    fi
     echo "Limine not found. Fetching..."
-    mkdir -p "$ROOT/tools/limine"
     "$GIT_BIN" clone https://github.com/limine-bootloader/limine.git \
         --branch=v7.x-binary --depth=1 "$ROOT/tools/limine"
 fi
