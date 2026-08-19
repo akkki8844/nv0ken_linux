@@ -18,7 +18,7 @@ jobs:
       - name: Install toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install --yes build-essential nasm xorriso grub-pc-bin grub-common mtools
+          sudo apt-get install --yes build-essential nasm xorriso grub-pc-bin grub-common mtools qemu-system-x86
 
       - name: Build kernel
         shell: bash
@@ -42,7 +42,7 @@ jobs:
           fi
 
       - name: Verify Multiboot2 image
-        run: grub-file --is-x86-multiboot2 build/kernel.elf
+        run: grub-file --is-x86-multiboot2 build/kernel-grub.elf
 
       - name: Build userspace and desktop
         shell: bash
@@ -68,6 +68,18 @@ jobs:
       - name: Build GRUB ISO
         run: bash build.sh grub-iso
 
+      - name: Verify boot contract
+        run: bash tools/verify_boot_contract.sh
+
+      - name: Smoke-test GRUB boot in QEMU
+        run: bash tools/qemu_boot_smoke.sh
+
+      - name: Build Limine ISO
+        run: bash build.sh iso
+
+      - name: Smoke-test Limine boot in QEMU
+        run: bash tools/qemu_boot_smoke.sh build/nv0ken.iso build/qemu-limine-serial.log
+
       - name: Upload boot artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -76,4 +88,7 @@ jobs:
             build/kernel.elf
             build/initrd.tar
             build/nv0ken-grub.iso
+            build/nv0ken.iso
+            build/qemu-serial.log
+            build/qemu-limine-serial.log
           if-no-files-found: error

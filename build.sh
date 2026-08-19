@@ -157,7 +157,6 @@ build_initrd() {
 
 build_iso() {
     log "building ISO"
-    fetch_limine
     bash "$TOOLS/mkiso.sh" || err "ISO build failed"
     ok "ISO built -> build/nv0ken.iso"
 }

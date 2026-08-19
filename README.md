@@ -1,6 +1,9 @@
 # nv0ken_linux
 
-a 64-bit x86_64 operating system built from scratch. boots via the limine bootloader, runs a graphical desktop environment, and includes a TCP/IP networking stack, a virtual filesystem, a preemptive scheduler, and a suite of desktop applications.
+a 64-bit x86_64 operating-system project built from scratch. It boots through
+Limine or GRUB into a kernel recovery monitor today; the userspace, windowing,
+networking, and application components are under active integration and are not
+represented as a finished desktop distribution.
 
 ---
 
@@ -18,7 +21,9 @@ cd nv0ken_linux
 bash build.sh run
 ```
 
-that's it. the script fetches the limine bootloader automatically on first run.
+The script fetches the Limine bootloader automatically on first run. A successful
+boot currently presents the kernel monitor over the framebuffer and serial
+console; use `help` for its available recovery commands.
 
 ---
 

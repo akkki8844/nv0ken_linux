@@ -112,6 +112,11 @@ int vfs_unlink(const char *path)
     if (!node || !node->parent || node == root_node) {
         return -1;
     }
+    /* Do not silently orphan a populated directory.  Recursive removal is a
+     * separate policy decision; unlink must remain a safe primitive. */
+    if (node->type == VFS_NODE_DIR && node->children) {
+        return -1;
+    }
 
     vfs_node_t **cursor = &node->parent->children;
     while (*cursor) {
