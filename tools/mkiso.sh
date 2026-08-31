@@ -31,8 +31,7 @@ fi
 if [ ! -f "$ROOT/tools/limine/limine-bios.sys" ] || \
    [ ! -f "$ROOT/tools/limine/limine-bios-cd.bin" ] || \
    [ ! -f "$ROOT/tools/limine/limine-uefi-cd.bin" ] || \
-   [ ! -f "$ROOT/tools/limine/BOOTX64.EFI" ] || \
-   [ ! -x "$ROOT/tools/limine/limine" ]; then
+   [ ! -f "$ROOT/tools/limine/BOOTX64.EFI" ]; then
     if [ -d "$ROOT/tools/limine" ] && [ "$(find "$ROOT/tools/limine" -mindepth 1 -maxdepth 1 | wc -l)" -gt 0 ]; then
         echo "error: Limine directory is incomplete: $ROOT/tools/limine" >&2
         echo "remove it and re-run the build to fetch a complete Limine binary release" >&2
@@ -45,15 +44,26 @@ fi
 
 LIMINE_BIN="$ROOT/tools/limine"
 
+# The binary branch ships the boot assets but deliberately does not include a
+# native Linux `limine` host executable. Build that tiny host utility locally
+# before performing the BIOS post-processing step.
+if [ ! -x "$LIMINE_BIN/limine" ]; then
+    make -C "$LIMINE_BIN" limine
+fi
+if [ ! -x "$LIMINE_BIN/limine" ]; then
+    echo "error: Limine host utility was not built: $LIMINE_BIN/limine" >&2
+    exit 1
+fi
+
 mkdir -p "$LIMINE_DIR"
 mkdir -p "$EFI_DIR"
 
 cp "$BUILD/kernel.elf"                    "$ISO_ROOT/kernel.elf"
-rm -f "$ISO_ROOT/limine.cfg" "$LIMINE_DIR/limine.cfg"
-# Limine looks for limine.conf on the ISO filesystem.  A .cfg file is not
-# discovered automatically and resulted in a boot menu with no entry.
-cp "$ROOT/boot/limine.conf"               "$ISO_ROOT/limine.conf"
-cp "$ROOT/boot/limine.conf"               "$LIMINE_DIR/limine.conf"
+rm -f "$ISO_ROOT/limine.conf" "$LIMINE_DIR/limine.conf"
+# Limine v7 scans these .cfg locations on the boot volume. Install the same
+# source configuration at the root and in the conventional boot directory.
+cp "$ROOT/boot/limine.conf"               "$ISO_ROOT/limine.cfg"
+cp "$ROOT/boot/limine.conf"               "$LIMINE_DIR/limine.cfg"
 if [ -f "$BUILD/initrd.tar" ]; then
     cp "$BUILD/initrd.tar" "$ISO_ROOT/initrd.tar"
 else

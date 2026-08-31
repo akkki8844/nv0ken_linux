@@ -17,6 +17,10 @@ struct framebuffer_state {
     uint32_t bg;
     uint32_t cursor_x;
     uint32_t cursor_y;
+    uint32_t viewport_x;
+    uint32_t viewport_y;
+    uint32_t viewport_width;
+    uint32_t viewport_height;
 };
 
 static struct framebuffer_state fb;
@@ -110,6 +114,10 @@ bool framebuffer_init_raw(uint64_t address, uint32_t width, uint32_t height,
     fb.bg = 0x101820;
     fb.cursor_x = 2;
     fb.cursor_y = 2;
+    fb.viewport_x = 0;
+    fb.viewport_y = 0;
+    fb.viewport_width = width;
+    fb.viewport_height = height;
     return true;
 }
 
@@ -143,32 +151,104 @@ void framebuffer_clear(uint32_t rgb)
     fb.bg = rgb;
     fb.cursor_x = 2;
     fb.cursor_y = 2;
+    fb.viewport_x = 0;
+    fb.viewport_y = 0;
+    fb.viewport_width = fb.width;
+    fb.viewport_height = fb.height;
+}
+
+void framebuffer_fill_rect(uint32_t x, uint32_t y, uint32_t width, uint32_t height,
+                           uint32_t rgb)
+{
+    if (!framebuffer_ready() || x >= fb.width || y >= fb.height) {
+        return;
+    }
+    if (width > fb.width - x) {
+        width = fb.width - x;
+    }
+    if (height > fb.height - y) {
+        height = fb.height - y;
+    }
+    for (uint32_t row = y; row < y + height; ++row) {
+        for (uint32_t column = x; column < x + width; ++column) {
+            fb.pixels[row * fb.pitch_pixels + column] = rgb;
+        }
+    }
+}
+
+void framebuffer_stroke_rect(uint32_t x, uint32_t y, uint32_t width, uint32_t height,
+                             uint32_t rgb)
+{
+    if (width == 0 || height == 0) {
+        return;
+    }
+    framebuffer_fill_rect(x, y, width, 1, rgb);
+    framebuffer_fill_rect(x, y + height - 1, width, 1, rgb);
+    framebuffer_fill_rect(x, y, 1, height, rgb);
+    framebuffer_fill_rect(x + width - 1, y, 1, height, rgb);
+}
+
+void framebuffer_set_console_style(uint32_t foreground, uint32_t background,
+                                   uint32_t cursor_x, uint32_t cursor_y)
+{
+    fb.fg = foreground;
+    fb.bg = background;
+    fb.cursor_x = cursor_x < fb.width ? cursor_x : 0;
+    fb.cursor_y = cursor_y < fb.height ? cursor_y : 0;
+}
+
+void framebuffer_set_console_viewport(uint32_t x, uint32_t y,
+                                      uint32_t width, uint32_t height)
+{
+    if (!framebuffer_ready() || x >= fb.width || y >= fb.height) {
+        return;
+    }
+    if (width > fb.width - x) {
+        width = fb.width - x;
+    }
+    if (height > fb.height - y) {
+        height = fb.height - y;
+    }
+    if (width < FONT_WIDTH + 2 || height < LINE_HEIGHT) {
+        return;
+    }
+    fb.viewport_x = x;
+    fb.viewport_y = y;
+    fb.viewport_width = width;
+    fb.viewport_height = height;
+    fb.cursor_x = x;
+    fb.cursor_y = y;
 }
 
 static void newline(void)
 {
-    fb.cursor_x = 2;
+    fb.cursor_x = fb.viewport_x;
     fb.cursor_y += LINE_HEIGHT;
-    if (fb.cursor_y + FONT_HEIGHT < fb.height) {
+    uint32_t viewport_bottom = fb.viewport_y + fb.viewport_height;
+    if (fb.cursor_y + FONT_HEIGHT < viewport_bottom) {
         return;
     }
 
     /* Keep the recovery console usable after a long boot log instead of
      * silently drawing beyond the framebuffer. */
-    if (fb.height <= LINE_HEIGHT) {
-        framebuffer_clear(fb.bg);
+    if (fb.viewport_height <= LINE_HEIGHT) {
+        framebuffer_fill_rect(fb.viewport_x, fb.viewport_y,
+                              fb.viewport_width, fb.viewport_height, fb.bg);
+        fb.cursor_y = fb.viewport_y;
         return;
     }
-    size_t retained_rows = fb.height - LINE_HEIGHT;
-    memmove(fb.pixels,
-            fb.pixels + LINE_HEIGHT * fb.pitch_pixels,
-            retained_rows * fb.pitch_pixels * sizeof(*fb.pixels));
-    for (uint32_t y = (uint32_t)retained_rows; y < fb.height; ++y) {
-        for (uint32_t x = 0; x < fb.width; ++x) {
-            fb.pixels[y * fb.pitch_pixels + x] = fb.bg;
+    uint32_t retained_rows = fb.viewport_height - LINE_HEIGHT;
+    for (uint32_t row = 0; row < retained_rows; ++row) {
+        uint32_t *destination = fb.pixels + (fb.viewport_y + row) * fb.pitch_pixels + fb.viewport_x;
+        uint32_t *source = fb.pixels + (fb.viewport_y + row + LINE_HEIGHT) * fb.pitch_pixels + fb.viewport_x;
+        memmove(destination, source, fb.viewport_width * sizeof(*fb.pixels));
+    }
+    for (uint32_t row = fb.viewport_y + retained_rows; row < viewport_bottom; ++row) {
+        for (uint32_t column = fb.viewport_x; column < fb.viewport_x + fb.viewport_width; ++column) {
+            fb.pixels[row * fb.pitch_pixels + column] = fb.bg;
         }
     }
-    fb.cursor_y = fb.height - LINE_HEIGHT;
+    fb.cursor_y = viewport_bottom - LINE_HEIGHT;
 }
 
 void framebuffer_putc(char ch)
@@ -182,7 +262,7 @@ void framebuffer_putc(char ch)
         return;
     }
 
-    if (fb.cursor_x + FONT_WIDTH + 2 >= fb.width) {
+    if (fb.cursor_x + FONT_WIDTH + 2 >= fb.viewport_x + fb.viewport_width) {
         newline();
     }
 

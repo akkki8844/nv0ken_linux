@@ -2,6 +2,7 @@
 
 #include "arch/x86_64/cpu.h"
 #include "arch/x86_64/io.h"
+#include "desktop.h"
 #include "drivers/console.h"
 #include "drivers/framebuffer.h"
 #include "drivers/serial.h"
@@ -38,7 +39,7 @@ static void command_help(void)
     kputs("  write PATH TEXT       create or replace a VFS file\n");
     kputs("  mkdir PATH | rm PATH  create or remove an empty entry\n");
     kputs("  selftest              verify VFS read/write/truncate/remove\n");
-    kputs("  dmesg | echo TEXT | clear\n");
+    kputs("  dmesg | echo TEXT | clear | desktop\n");
     kputs("  reboot | halt\n");
 }
 
@@ -152,6 +153,12 @@ static void command_dmesg(void)
     }
 }
 
+static void command_desktop(void)
+{
+    desktop_render(monitor_pci_devices);
+    kputs("nv0 recovery desktop refreshed\n");
+}
+
 static void command_write(const char *path, const char *text)
 {
     if (!path || !path[0] || !text) {
@@ -259,8 +266,8 @@ static void execute_command(char *line)
         command_dmesg();
     } else if (starts_with(line, "echo ")) {
         kprintf("%s\n", line + 5);
-    } else if (strcmp(line, "clear") == 0) {
-        framebuffer_clear(0x101820);
+    } else if (strcmp(line, "clear") == 0 || strcmp(line, "desktop") == 0) {
+        command_desktop();
     } else if (strcmp(line, "reboot") == 0) {
         cpu_cli();
         outb(0x64, 0xfe);
