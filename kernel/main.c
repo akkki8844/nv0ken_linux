@@ -15,6 +15,7 @@
 #include "drivers/pci.h"
 #include "drivers/serial.h"
 #include "drivers/timer.h"
+#include "desktop.h"
 #include "fs/fd_table.h"
 #include "fs/initrd.h"
 #include "fs/tmpfs.h"
@@ -262,6 +263,7 @@ void kmain(void)
     serial_write("[boot] initializing hardware\n");
     init_hardware();
 
+    desktop_render(pci_device_count);
     kprintf("\n+--------------------------------------------------+\n");
     kprintf("|                nv0ken_linux 0.1                 |\n");
     kprintf("|        x86_64 educational operating system      |\n");
