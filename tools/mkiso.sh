@@ -59,11 +59,11 @@ mkdir -p "$LIMINE_DIR"
 mkdir -p "$EFI_DIR"
 
 cp "$BUILD/kernel.elf"                    "$ISO_ROOT/kernel.elf"
-rm -f "$ISO_ROOT/limine.cfg" "$LIMINE_DIR/limine.cfg"
-# Limine looks for limine.conf on the ISO filesystem.  A .cfg file is not
-# discovered automatically and resulted in a boot menu with no entry.
-cp "$ROOT/boot/limine.conf"               "$ISO_ROOT/limine.conf"
-cp "$ROOT/boot/limine.conf"               "$LIMINE_DIR/limine.conf"
+rm -f "$ISO_ROOT/limine.conf" "$LIMINE_DIR/limine.conf"
+# Limine v7 scans these .cfg locations on the boot volume. Install the same
+# source configuration at the root and in the conventional boot directory.
+cp "$ROOT/boot/limine.conf"               "$ISO_ROOT/limine.cfg"
+cp "$ROOT/boot/limine.conf"               "$LIMINE_DIR/limine.cfg"
 if [ -f "$BUILD/initrd.tar" ]; then
     cp "$BUILD/initrd.tar" "$ISO_ROOT/initrd.tar"
 else
