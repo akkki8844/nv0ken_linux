@@ -31,8 +31,7 @@ fi
 if [ ! -f "$ROOT/tools/limine/limine-bios.sys" ] || \
    [ ! -f "$ROOT/tools/limine/limine-bios-cd.bin" ] || \
    [ ! -f "$ROOT/tools/limine/limine-uefi-cd.bin" ] || \
-   [ ! -f "$ROOT/tools/limine/BOOTX64.EFI" ] || \
-   [ ! -x "$ROOT/tools/limine/limine" ]; then
+   [ ! -f "$ROOT/tools/limine/BOOTX64.EFI" ]; then
     if [ -d "$ROOT/tools/limine" ] && [ "$(find "$ROOT/tools/limine" -mindepth 1 -maxdepth 1 | wc -l)" -gt 0 ]; then
         echo "error: Limine directory is incomplete: $ROOT/tools/limine" >&2
         echo "remove it and re-run the build to fetch a complete Limine binary release" >&2
@@ -44,6 +43,17 @@ if [ ! -f "$ROOT/tools/limine/limine-bios.sys" ] || \
 fi
 
 LIMINE_BIN="$ROOT/tools/limine"
+
+# The binary branch ships the boot assets but deliberately does not include a
+# native Linux `limine` host executable. Build that tiny host utility locally
+# before performing the BIOS post-processing step.
+if [ ! -x "$LIMINE_BIN/limine" ]; then
+    make -C "$LIMINE_BIN" limine
+fi
+if [ ! -x "$LIMINE_BIN/limine" ]; then
+    echo "error: Limine host utility was not built: $LIMINE_BIN/limine" >&2
+    exit 1
+fi
 
 mkdir -p "$LIMINE_DIR"
 mkdir -p "$EFI_DIR"
